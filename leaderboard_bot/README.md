@@ -8,7 +8,7 @@ One Python bot, with Windows, Linux/Proxmox and Docker/cloud deployment options.
 
 ## OCR and numeric rules
 
-Local Tesseract OCR uses whole-image text detection, fuzzy labels and four image variants. It requires at least two matching readings per statistic and rejects conflicting supported readings. It has no fixed screenshot coordinates and no paid vision API. Confidence and agreement reduce errors; they cannot guarantee accuracy or detect edited screenshots. Scores belong to the Discord uploader, not a verified Fortnite account. Use a trusted community or human moderation for prize competitions.
+Local Tesseract OCR uses whole-image text detection, fuzzy labels and four image variants. It requires at least two matching readings per statistic and rejects conflicting supported readings. If whole-image OCR fails, a bounded fallback locates wide green headers, derives panel crops from their geometry and isolates bright neutral text for block OCR. It has no fixed screenshot coordinates and no paid vision API. See OCR_PANEL_FIX.md for the added OpenCV dependency and validation limits. Confidence and agreement reduce errors; they cannot guarantee accuracy or detect edited screenshots. Scores belong to the Discord uploader, not a verified Fortnite account. Use a trusted community or human moderation for prize competitions.
 
 Configured suffixes: K=10³, M=10⁶, B=10⁹, T=10¹², Qa=10¹⁵, Qi=10¹⁸. These are conventional mappings inferred for this game, **not verified with the game developer**. Verify before running a real competition. Unknown suffixes fail; extend SUFFIXES in ocr.py only after confirming a game's convention. Exact integers, not floating point or SQLite numeric sorting, preserve large-money rankings. Display rounds money to three decimals; stored scores are exact to the screenshot's displayed precision. Hidden precision in abbreviated game values cannot be recovered.
 
@@ -34,3 +34,7 @@ Run `python -m unittest discover -s tests -v`. Run `python ocr.py "path/to/image
 ## Configurable moderator role and audit channel
 
 Set ADMIN_ROLE_ID and AUDIT_CHANNEL_ID in your local .env to use an existing moderator role and private audit text channel. No roles or channels are created. See ROLE_AUDIT_SETUP.md for Discord command visibility permissions, durable delivery and installation. The configured role is required even for administrators. Leave the settings unset/0 to preserve Manage Server access and disable channel delivery.
+
+## Planned improvements
+
+See ROADMAP.md for the saved backlog, including backups, submission recovery, clearer failure feedback, OCR test coverage, cooldowns, review, duplicate-image checks, admin undo and moderator status.

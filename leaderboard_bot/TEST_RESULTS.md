@@ -27,3 +27,7 @@ Not tested: live Discord reactions/permissions/pins/reconnects, real concurrent 
 ## Configurable role and audit channel update
 
 23 automated tests pass (14 existing + 9 new). Role membership, audit embeds, durable retries, save behavior on delivery failures, atomic outbox insertion and database migration are covered. See ROLE_AUDIT_SETUP.md for the test scope and live Discord checks still required.
+
+## OCR panel fallback fix
+
+34 tests discovered: 33 passed and 1 skipped with available private samples. The new monitor photo and original direct screenshot return their exact expected values. The cached older monitor photo is truncated and was explicitly skipped. Default installs without private samples skip three optional image tests (31 pass, 3 skip). See OCR_PANEL_FIX.md.
