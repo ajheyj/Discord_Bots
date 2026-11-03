@@ -1,0 +1,12 @@
+[Unit]
+Description=Discord OCR Leaderboard
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=leaderboard
+WorkingDirectory=/opt/leaderboard-bot
+ExecStart=/opt/leaderboard-bot/.venv/bin/python bot.py
+Restart=on-failure
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
