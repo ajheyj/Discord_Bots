@@ -18,7 +18,7 @@ SQLite stores scores, persistent leaderboard message IDs and an audit of message
 
 One instance per server/database. A bounded queue (50 messages) and one OCR worker prevent simultaneous OCR jobs. Messages posted while the bot is offline, queued jobs lost on restart, and message edits are not replayed: players should repost when the bot is back. The bot automatically reconnects through discord.py. It restores missing leaderboard messages on refresh. Tokens belong in .env only.
 
-No admin score editor or reset command is included. If an OCR error gets accepted, stop the bot, back up the database and have the maintainer correct it. Do not delete the database casually; it contains everyone's records.
+Manage Server members can use /admin-set to correct one existing score and /admin-remove to remove a player from all rankings (explicit confirmation required). Every edit requires a reason and is recorded in the admin_audit table with the moderator, player, UTC time and old/new values. See ADMIN_UPDATE.md for usage and upgrade instructions. Removal is not a ban: later screenshots, including already queued submissions, can add the player again or raise a corrected score. Do not delete the database casually; it contains everyone's records.
 
 ## Development checks
 

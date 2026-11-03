@@ -6,6 +6,7 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 from ocr import extract,OCRFailure,SUFFIXES
 from store import Store
+from admin_commands import register_admin
 load_dotenv()
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
 GUILD=int(os.environ['GUILD_ID']); SUB=int(os.environ['SUBMISSIONS_CHANNEL_ID']); BOARD=int(os.environ['LEADERBOARD_CHANNEL_ID'])
@@ -106,4 +107,6 @@ async def leaderboard(interaction:discord.Interaction,category:str='packs',page:
     rows=DB.ranked(category); start=(page-1)*10
     lines=[f'{1+sum(r[2]>v for r in rows)}. <@{u}> — {display(category,v)}' for u,n,v in rows[start:start+10]]
     await interaction.response.send_message(f'**{META[category][0]} — Page {page}**\n'+('\n'.join(lines) or 'No players on this page.'),ephemeral=True)
+register_admin(bot, DB, GUILD, META, display)
+
 if __name__=='__main__': bot.run(os.environ['DISCORD_TOKEN'],log_handler=None)

@@ -8,7 +8,10 @@ class Store:
         self.db=sqlite3.connect(path)
         self.db.executescript('''CREATE TABLE IF NOT EXISTS scores(user TEXT PRIMARY KEY,name TEXT,packs TEXT,money TEXT,coins TEXT);
         CREATE TABLE IF NOT EXISTS audit(message TEXT PRIMARY KEY,user TEXT,url TEXT,time TEXT,status TEXT,details TEXT);
-        CREATE TABLE IF NOT EXISTS boards(category TEXT PRIMARY KEY,message TEXT);''')
+        CREATE TABLE IF NOT EXISTS boards(category TEXT PRIMARY KEY,message TEXT);
+        CREATE TABLE IF NOT EXISTS admin_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor TEXT NOT NULL,user TEXT NOT NULL,time TEXT NOT NULL,action TEXT NOT NULL,
+        category TEXT,before_values TEXT NOT NULL,after_values TEXT NOT NULL,reason TEXT NOT NULL);''')
     def seen(self,message):
         return self.db.execute('SELECT 1 FROM audit WHERE message=? AND status="ok"',(str(message),)).fetchone() is not None
     def record(self,message,user,name,url,values=None,error=None):
@@ -27,3 +30,27 @@ class Store:
         return int(row[0]) if row else None
     def save_board(self,key,message):
         with self.db: self.db.execute('INSERT OR REPLACE INTO boards VALUES(?,?)',(key,str(message)))
+
+    def admin_change(self,actor,user,reason,category=None,value=None):
+        """Override an existing entry and append its audit row atomically."""
+        if not isinstance(reason,str) or not 1 <= len(reason.strip()) <= 300:
+            raise ValueError('Provide a reason between 1 and 300 characters.')
+        if category is not None:
+            if category not in ('packs','money','coins'):
+                raise ValueError('Unknown category.')
+            if type(value) is not int or not 0 <= value < 10**60:
+                raise ValueError('Score must be a nonnegative integer below 10^60.')
+        with self.db:
+            row=self.db.execute('SELECT packs,money,coins FROM scores WHERE user=?',(str(user),)).fetchone()
+            if row is None:
+                raise ValueError('That player has no recorded scores.')
+            before=dict(zip(('packs','money','coins'),map(int,row)))
+            after=None if category is None else {**before,category:value}
+            if category is None:
+                self.db.execute('DELETE FROM scores WHERE user=?',(str(user),))
+            else:
+                self.db.execute('UPDATE scores SET '+category+'=? WHERE user=?',(str(value),str(user)))
+            self.db.execute('''INSERT INTO admin_audit(actor,user,time,action,category,before_values,after_values,reason)
+                VALUES(?,?,?,?,?,?,?,?)''',(str(actor),str(user),datetime.now(timezone.utc).isoformat(),
+                'remove' if category is None else 'set',category,json.dumps(before),json.dumps(after),reason.strip()))
+        return before,after
