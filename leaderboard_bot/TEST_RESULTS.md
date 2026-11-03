@@ -23,3 +23,7 @@ Not tested: live Discord reactions/permissions/pins/reconnects, real concurrent 
 ## Admin correction update
 
 14 tests pass (3 existing + 11 new) under the build environment. New checks cover strict exact number parsing, single-category lowering, preserved other stats/submission history/board IDs, confirmed removal, audit history, migration/reopen, score rollback on audit failure, invalid inputs, Manage Server and configured-server checks, private responses, cancellation and display refresh failure after a successful save. Live Discord commands and deployment still need testing on the running server. See ADMIN_UPDATE.md.
+
+## Configurable role and audit channel update
+
+23 automated tests pass (14 existing + 9 new). Role membership, audit embeds, durable retries, save behavior on delivery failures, atomic outbox insertion and database migration are covered. See ROLE_AUDIT_SETUP.md for the test scope and live Discord checks still required.

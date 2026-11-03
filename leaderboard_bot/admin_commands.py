@@ -30,16 +30,27 @@ def parse_score(category, text):
         return int(value)
 
 
-def register_admin(bot, store, guild_id, categories, display):
+def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_channel=None):
     async def authorized(interaction):
         if interaction.guild_id != guild_id:
             raise app_commands.CheckFailure('Use this command in the configured server.')
-        if not interaction.permissions.manage_guild:
+        if role_id:
+            if role_id == guild_id or not any(role.id == role_id for role in getattr(interaction.user, 'roles', ())):
+                raise app_commands.CheckFailure('You need the configured leaderboard moderator role.')
+        elif not interaction.permissions.manage_guild:
             raise app_commands.MissingPermissions(['manage_guild'])
         return True
 
     async def refresh(interaction, summary):
-        # Commit already succeeded: a Discord failure must not be reported as a failed save.
+        # The database save is already committed; retry failed audit delivery separately.
+        if audit_channel is not None:
+            try:
+                await audit_channel.flush()
+                if store.pending_admin_audits(1):
+                    summary += '\nSome audit messages are queued for automatic delivery.'
+            except Exception:
+                logging.exception('Admin edit saved; audit channel delivery pending')
+                summary += '\nSaved, but audit channel delivery is pending; it will retry automatically.'
         try:
             await bot.boards()
         except Exception:
@@ -47,9 +58,9 @@ def register_admin(bot, store, guild_id, categories, display):
             summary += '\nSaved, but the public leaderboard refresh is pending; it will retry automatically.'
         await interaction.followup.send(summary, ephemeral=True)
 
-    @bot.tree.command(name='admin-set', description='Correct one existing player score (Manage Server required)')
+    @bot.tree.command(name='admin-set', description='Correct one existing player score (moderators only)')
     @app_commands.guild_only()
-    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.default_permissions(**({} if role_id else {'manage_guild': True}))
     @app_commands.check(authorized)
     @app_commands.choices(category=[app_commands.Choice(name=title, value=key) for key,(title,_) in categories.items()])
     @app_commands.describe(player='Player whose recorded score needs correction', category='Statistic to change',
@@ -70,9 +81,9 @@ def register_admin(bot, store, guild_id, categories, display):
         await refresh(interaction, f'Updated <@{player.id}> — {categories[category][0]}: '
                       f'**{display(category,before[category])} → {display(category,after[category])}**. Audit saved.')
 
-    @bot.tree.command(name='admin-remove', description='Remove a player from all rankings (Manage Server required)')
+    @bot.tree.command(name='admin-remove', description='Remove a player from all rankings (moderators only)')
     @app_commands.guild_only()
-    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.default_permissions(**({} if role_id else {'manage_guild': True}))
     @app_commands.check(authorized)
     @app_commands.describe(player='Player to remove from all three rankings', reason='Why the entry is being removed',
                            confirm='Choose True to confirm removal from all categories')
@@ -93,7 +104,7 @@ def register_admin(bot, store, guild_id, categories, display):
         if isinstance(error, app_commands.MissingPermissions):
             text = 'You need Manage Server permission to use this command.'
         elif isinstance(error, app_commands.CheckFailure):
-            text = 'Use this command in the configured server with Manage Server permission.'
+            text = 'You need the configured leaderboard moderator role in this server.' if role_id else 'Use this command in the configured server with Manage Server permission.'
         else:
             logging.error('Admin command failed', exc_info=(type(error), error, error.__traceback__))
             text = 'The command encountered an error. Check /rank before retrying; the change may already be saved. Ask the maintainer to check the logs.'

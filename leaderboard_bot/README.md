@@ -18,7 +18,7 @@ SQLite stores scores, persistent leaderboard message IDs and an audit of message
 
 One instance per server/database. A bounded queue (50 messages) and one OCR worker prevent simultaneous OCR jobs. Messages posted while the bot is offline, queued jobs lost on restart, and message edits are not replayed: players should repost when the bot is back. The bot automatically reconnects through discord.py. It restores missing leaderboard messages on refresh. Tokens belong in .env only.
 
-Manage Server members can use /admin-set to correct one existing score and /admin-remove to remove a player from all rankings (explicit confirmation required). Every edit requires a reason and is recorded in the admin_audit table with the moderator, player, UTC time and old/new values. See ADMIN_UPDATE.md for usage and upgrade instructions. Removal is not a ban: later screenshots, including already queued submissions, can add the player again or raise a corrected score. Do not delete the database casually; it contains everyone's records.
+Members with the configured ADMIN_ROLE_ID (or Manage Server permission if unset) can use /admin-set to correct one existing score and /admin-remove to remove a player from all rankings (explicit confirmation required). Every edit requires a reason and is recorded in the admin_audit table with the moderator, player, UTC time and old/new values. See ADMIN_UPDATE.md for usage and upgrade instructions. Removal is not a ban: later screenshots, including already queued submissions, can add the player again or raise a corrected score. Do not delete the database casually; it contains everyone's records.
 
 ## Development checks
 
@@ -30,3 +30,7 @@ Run `python -m unittest discover -s tests -v`. Run `python ocr.py "path/to/image
 - [discord.py interactions](https://discordpy.readthedocs.io/en/stable/interactions/api.html)
 - [Tesseract installation](https://tesseract-ocr.github.io/tessdoc/Installation.html)
 - [Discord Developer Portal](https://discord.com/developers/applications)
+
+## Configurable moderator role and audit channel
+
+Set ADMIN_ROLE_ID and AUDIT_CHANNEL_ID in your local .env to use an existing moderator role and private audit text channel. No roles or channels are created. See ROLE_AUDIT_SETUP.md for Discord command visibility permissions, durable delivery and installation. The configured role is required even for administrators. Leave the settings unset/0 to preserve Manage Server access and disable channel delivery.

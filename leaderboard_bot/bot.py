@@ -7,9 +7,13 @@ from dotenv import load_dotenv
 from ocr import extract,OCRFailure,SUFFIXES
 from store import Store
 from admin_commands import register_admin
+from audit_channel import AuditChannel
 load_dotenv()
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
 GUILD=int(os.environ['GUILD_ID']); SUB=int(os.environ['SUBMISSIONS_CHANNEL_ID']); BOARD=int(os.environ['LEADERBOARD_CHANNEL_ID'])
+ADMIN_ROLE=int(os.getenv('ADMIN_ROLE_ID') or '0'); AUDIT_CHANNEL=int(os.getenv('AUDIT_CHANNEL_ID') or '0')
+if ADMIN_ROLE < 0 or AUDIT_CHANNEL < 0 or ADMIN_ROLE == GUILD:
+    raise ValueError('Use valid role/channel IDs; @everyone cannot be the admin role.')
 DB=Store(os.getenv('DATABASE_PATH','data/leaderboard.sqlite3'))
 META={'packs':('📦 Packs Opened',0xE5B83B),'money':('💰 Total Money Earned',0x2ECC71),'coins':('🪙 Grade Coins Earned',0x9B59B6)}
 def display(key,value):
@@ -26,7 +30,7 @@ class Bot(discord.Client):
     async def setup_hook(self):
         self.tree.copy_global_to(guild=discord.Object(id=GUILD))
         await self.tree.sync(guild=discord.Object(id=GUILD))
-        self.worker=asyncio.create_task(self.work()); self.refresh.start()
+        self.worker=asyncio.create_task(self.work()); self.refresh.start(); self.audit_refresh.start()
     async def reaction(self,msg,emoji,remove=False):
         try:
             if remove: await msg.remove_reaction(emoji,self.user)
@@ -82,6 +86,12 @@ class Bot(discord.Client):
                 if not message.pinned:
                     try: await message.pin(reason='Leaderboard')
                     except discord.Forbidden: logging.warning('Pin permission missing; manually pin leaderboard messages')
+    @tasks.loop(seconds=60)
+    async def audit_refresh(self):
+        try: await audit_log.flush()
+        except Exception: logging.exception('Audit channel delivery pending; will retry')
+    @audit_refresh.before_loop
+    async def before_audit_refresh(self): await self.wait_until_ready()
     @tasks.loop(minutes=2)
     async def refresh(self):
         try: await self.boards()
@@ -107,6 +117,8 @@ async def leaderboard(interaction:discord.Interaction,category:str='packs',page:
     rows=DB.ranked(category); start=(page-1)*10
     lines=[f'{1+sum(r[2]>v for r in rows)}. <@{u}> — {display(category,v)}' for u,n,v in rows[start:start+10]]
     await interaction.response.send_message(f'**{META[category][0]} — Page {page}**\n'+('\n'.join(lines) or 'No players on this page.'),ephemeral=True)
-register_admin(bot, DB, GUILD, META, display)
+audit_log=AuditChannel(bot, DB, GUILD, AUDIT_CHANNEL, META, display)
+register_admin(bot, DB, GUILD, META, display, role_id=ADMIN_ROLE,
+               audit_channel=audit_log if AUDIT_CHANNEL else None)
 
 if __name__=='__main__': bot.run(os.environ['DISCORD_TOKEN'],log_handler=None)

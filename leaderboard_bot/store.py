@@ -11,7 +11,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS boards(category TEXT PRIMARY KEY,message TEXT);
         CREATE TABLE IF NOT EXISTS admin_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,
         actor TEXT NOT NULL,user TEXT NOT NULL,time TEXT NOT NULL,action TEXT NOT NULL,
-        category TEXT,before_values TEXT NOT NULL,after_values TEXT NOT NULL,reason TEXT NOT NULL);''')
+        category TEXT,before_values TEXT NOT NULL,after_values TEXT NOT NULL,reason TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS admin_delivery(audit_id INTEGER PRIMARY KEY,delivered_message TEXT);''')
     def seen(self,message):
         return self.db.execute('SELECT 1 FROM audit WHERE message=? AND status="ok"',(str(message),)).fetchone() is not None
     def record(self,message,user,name,url,values=None,error=None):
@@ -50,7 +51,20 @@ class Store:
                 self.db.execute('DELETE FROM scores WHERE user=?',(str(user),))
             else:
                 self.db.execute('UPDATE scores SET '+category+'=? WHERE user=?',(str(value),str(user)))
-            self.db.execute('''INSERT INTO admin_audit(actor,user,time,action,category,before_values,after_values,reason)
+            cursor=self.db.execute('''INSERT INTO admin_audit(actor,user,time,action,category,before_values,after_values,reason)
                 VALUES(?,?,?,?,?,?,?,?)''',(str(actor),str(user),datetime.now(timezone.utc).isoformat(),
                 'remove' if category is None else 'set',category,json.dumps(before),json.dumps(after),reason.strip()))
+            self.db.execute('INSERT INTO admin_delivery(audit_id) VALUES(?)',(cursor.lastrowid,))
         return before,after
+
+
+    def pending_admin_audits(self,limit=20):
+        return self.db.execute('''SELECT a.id,a.actor,a.user,a.time,a.action,a.category,
+            a.before_values,a.after_values,a.reason FROM admin_audit a
+            JOIN admin_delivery d ON d.audit_id=a.id
+            WHERE d.delivered_message IS NULL ORDER BY a.id LIMIT ?''',(limit,)).fetchall()
+
+    def mark_admin_delivered(self,audit_id,message_id):
+        with self.db:
+            self.db.execute('UPDATE admin_delivery SET delivered_message=? WHERE audit_id=?',
+                            (str(message_id),audit_id))
