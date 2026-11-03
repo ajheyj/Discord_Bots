@@ -29,12 +29,26 @@ class AuditChannel:
         embed.set_footer(text=f'Admin audit #{audit_id}')
         return embed
 
+    def failure_embed(self, row):
+        failure_id,message_id,user,url,time,reason = row
+        embed = discord.Embed(title='Screenshot processing failed',color=0xE74C3C,
+                              description=f'[Open original image message]({url})',
+                              timestamp=datetime.fromisoformat(time))
+        embed.add_field(name='Player',value=f'<@{user}>\nID: {user}')
+        embed.add_field(name='Message ID',value=message_id)
+        embed.add_field(name='Reason',value=discord.utils.escape_markdown(reason),inline=False)
+        if self.store.seen(message_id):
+            embed.add_field(name='Current status',value='This submission has since processed successfully.',inline=False)
+        embed.set_footer(text=f'Submission failure #{failure_id} • same message/reason logged once')
+        return embed
+
     async def flush(self):
         if not self.channel_id:
             return
         async with self.lock:
             rows = self.store.pending_admin_audits()
-            if not rows:
+            failures = self.store.pending_submission_failures()
+            if not rows and not failures:
                 return
             channel = await self.bot.fetch_channel(self.channel_id)
             if not isinstance(channel, discord.TextChannel) or channel.guild.id != self.guild_id:
@@ -42,3 +56,6 @@ class AuditChannel:
             for row in rows:
                 message = await channel.send(embed=self.embed(row), allowed_mentions=discord.AllowedMentions.none())
                 self.store.mark_admin_delivered(row[0], message.id)
+            for row in failures:
+                message = await channel.send(embed=self.failure_embed(row), allowed_mentions=discord.AllowedMentions.none())
+                self.store.mark_failure_delivered(row[0], message.id)

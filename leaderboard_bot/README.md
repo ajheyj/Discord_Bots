@@ -16,7 +16,7 @@ Configured suffixes: K=10³, M=10⁶, B=10⁹, T=10¹², Qa=10¹⁵, Qi=10¹⁸.
 
 SQLite stores scores, persistent leaderboard message IDs and an audit of message ID/link, user ID, extracted values or failure, and UTC timestamp. Images are processed in memory and are not archived. The original Discord message must remain available if you want to inspect it later. Database contains community activity; restrict access and back it up.
 
-One instance per server/database. A bounded queue (50 messages) and one OCR worker prevent simultaneous OCR jobs. Messages posted while the bot is offline, queued jobs lost on restart, and message edits are not replayed: players should repost when the bot is back. The bot automatically reconnects through discord.py. It restores missing leaderboard messages on refresh. Tokens belong in .env only.
+One instance per server/database. A bounded queue (50 messages) and one OCR worker prevent simultaneous OCR jobs. On each process startup, it scans the configured submissions text channel for failed/unprocessed supported image messages posted in the previous 72 hours (HISTORY_LOOKBACK_HOURS). Successful message IDs are skipped; edits to successful messages are not reprocessed. Recovery outside the window requires a new upload. The bot automatically reconnects through discord.py. It restores missing leaderboard messages on refresh. Tokens belong in .env only.
 
 Members with the configured ADMIN_ROLE_ID (or Manage Server permission if unset) can use /admin-set to correct one existing score and /admin-remove to remove a player from all rankings (explicit confirmation required). Every edit requires a reason and is recorded in the admin_audit table with the moderator, player, UTC time and old/new values. See ADMIN_UPDATE.md for usage and upgrade instructions. Removal is not a ban: later screenshots, including already queued submissions, can add the player again or raise a corrected score. Do not delete the database casually; it contains everyone's records.
 
@@ -38,3 +38,7 @@ Set ADMIN_ROLE_ID and AUDIT_CHANNEL_ID in your local .env to use an existing mod
 ## Planned improvements
 
 See ROADMAP.md for the saved backlog, including backups, submission recovery, clearer failure feedback, OCR test coverage, cooldowns, review, duplicate-image checks, admin undo and moderator status.
+
+## Startup recovery and failure reports
+
+HISTORY_REPLAY_SETUP.md explains the configurable 72-hour startup scan and failure reports in the existing AUDIT_CHANNEL_ID channel. Failed screenshots link to the original Discord message and include a moderator-facing reason. The same message/reason is reported once; raw tracebacks remain in the service logs. No channel is created.

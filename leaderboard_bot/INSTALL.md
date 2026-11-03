@@ -116,7 +116,7 @@ The included Docker image runs as a non-root user, includes Tesseract and uses a
 
 Wait for the bot to appear online. In #leaderboard, expect three messages. Pin them manually if the bot cannot. Upload one screenshot to #leaderboard-submissions. Expect ⏳, then ✅ or ❌. Try /rank and /leaderboard. With a successful submission, confirm that all displayed values match the image before inviting players. Test an unreadable image and confirm it gets ❌ without changing the scores.
 
-The commands are synced to the configured server when the bot starts. If missing, check the server ID, invitation scopes and logs; restart Discord after waiting briefly. The bot does not process historical uploads or edits. Repost any screenshot submitted while it was offline or left at ⏳ after a restart.
+The commands are synced to the configured server when the bot starts. If missing, check the server ID, invitation scopes and logs; restart Discord after waiting briefly. On startup the bot retries failed/unprocessed supported image messages posted in the previous 72 hours. Give it View Channel and Read Message History in submissions. It skips successful message IDs and does not reprocess edits to successful submissions. Older, deleted or inaccessible messages need a new upload. See HISTORY_REPLAY_SETUP.md.
 
 ## 7. Backups and maintenance
 

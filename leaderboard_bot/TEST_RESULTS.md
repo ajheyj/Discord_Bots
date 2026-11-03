@@ -31,3 +31,7 @@ Not tested: live Discord reactions/permissions/pins/reconnects, real concurrent 
 ## OCR panel fallback fix
 
 34 tests discovered: 33 passed and 1 skipped with available private samples. The new monitor photo and original direct screenshot return their exact expected values. The cached older monitor photo is truncated and was explicitly skipped. Default installs without private samples skip three optional image tests (31 pass, 3 skip). See OCR_PANEL_FIX.md.
+
+## Startup history recovery and failure reporting
+
+52 tests discovered: 49 pass, 3 optional private-image tests skip without OCR_SAMPLE_DIR. The 18 new tests cover history filtering/backpressure/deduplication, worker replay behavior, original-message failure embeds, retry/deduplication after restart, and atomic failure recording. Prior role/admin/OCR tests still pass. Live Discord history and audit channel permissions need server-side checks. See HISTORY_REPLAY_SETUP.md.

@@ -12,7 +12,10 @@ class Store:
         CREATE TABLE IF NOT EXISTS admin_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,
         actor TEXT NOT NULL,user TEXT NOT NULL,time TEXT NOT NULL,action TEXT NOT NULL,
         category TEXT,before_values TEXT NOT NULL,after_values TEXT NOT NULL,reason TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS admin_delivery(audit_id INTEGER PRIMARY KEY,delivered_message TEXT);''')
+        CREATE TABLE IF NOT EXISTS admin_delivery(audit_id INTEGER PRIMARY KEY,delivered_message TEXT);
+        CREATE TABLE IF NOT EXISTS submission_failures(id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,user TEXT NOT NULL,url TEXT NOT NULL,time TEXT NOT NULL,
+        reason TEXT NOT NULL,delivered_message TEXT,UNIQUE(message,reason));''')
     def seen(self,message):
         return self.db.execute('SELECT 1 FROM audit WHERE message=? AND status="ok"',(str(message),)).fetchone() is not None
     def record(self,message,user,name,url,values=None,error=None):
@@ -22,6 +25,9 @@ class Store:
                 vals=[max(values[k],int(old[i]) if old else 0) for i,k in enumerate(('packs','money','coins'))]
                 self.db.execute('INSERT OR REPLACE INTO scores VALUES(?,?,?,?,?)',(str(user),name,*map(str,vals)))
             self.db.execute('INSERT OR REPLACE INTO audit VALUES(?,?,?,?,?,?)',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),'ok' if values else 'failed',json.dumps(values) if values else error))
+            if not values:
+                self.db.execute('''INSERT OR IGNORE INTO submission_failures(message,user,url,time,reason)
+                    VALUES(?,?,?,?,?)''',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),str(error or 'Submission failed.')[:500]))
     def ranked(self,key):
         if key not in ('packs','money','coins'): raise ValueError(key)
         rows=self.db.execute('SELECT user,name,'+key+' FROM scores').fetchall()
@@ -68,3 +74,13 @@ class Store:
         with self.db:
             self.db.execute('UPDATE admin_delivery SET delivered_message=? WHERE audit_id=?',
                             (str(message_id),audit_id))
+
+
+    def pending_submission_failures(self,limit=20):
+        return self.db.execute('''SELECT id,message,user,url,time,reason FROM submission_failures
+            WHERE delivered_message IS NULL ORDER BY id LIMIT ?''',(limit,)).fetchall()
+
+    def mark_failure_delivered(self,failure_id,message_id):
+        with self.db:
+            self.db.execute('UPDATE submission_failures SET delivered_message=? WHERE id=?',
+                            (str(message_id),failure_id))

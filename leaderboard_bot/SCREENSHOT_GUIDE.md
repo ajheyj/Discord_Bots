@@ -20,4 +20,4 @@ Your highest recorded score in each category is kept. Older or duplicate screens
 🔎 **/rank** privately shows your position in all three categories.
 📋 **/leaderboard** lets you choose a category and page, including players outside the Top 10.
 
-If the bot is offline, repost after it returns. If ⏳ stays after a bot restart, repost. If a ✅ submission shows the wrong number, tell a server admin and link your original message.
+After a restart, the bot retries failed or unprocessed images posted within the last 72 hours. Leave your original message in place. Images older than that need a new upload. If a ✅ submission shows the wrong number, tell a server admin and link your original message.
