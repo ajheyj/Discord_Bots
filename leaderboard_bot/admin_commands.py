@@ -4,13 +4,18 @@ import re
 from decimal import Decimal, localcontext
 import discord
 from discord import app_commands
-from ocr import SUFFIXES
+from ocr import SUFFIXES, playtime_seconds
+from store import STAT_KEYS
 
 
 def parse_score(category, text):
-    if category not in ('packs', 'money', 'coins'):
+    if category not in STAT_KEYS:
         raise ValueError('Unknown category.')
     text = text.strip()
+    if category=='playtime' and any(c.isalpha() for c in text):
+        value=playtime_seconds(text)
+        if value>=10**60:raise ValueError('Playtime is too large.')
+        return value
     if len(text) > 80:
         raise ValueError('Score is too long.')
     # Strict comma grouping; no exponent notation or silently discarded decimals.
@@ -19,7 +24,7 @@ def parse_score(category, text):
         raise ValueError('Use a nonnegative number, such as 4619 or $26.7Qa.')
     currency, integer, fraction, suffix = match.groups()
     if category != 'money' and (currency or fraction or suffix):
-        raise ValueError('Packs and coins must be whole numbers without suffixes.')
+        raise ValueError('Counts and playtime seconds must be whole numbers without suffixes.')
     if suffix not in SUFFIXES:
         raise ValueError('Supported suffixes: K, M, B, T, Qa, Qi (case-sensitive).')
     with localcontext() as context:
@@ -79,13 +84,13 @@ def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_c
             await interaction.followup.send(str(error), ephemeral=True)
             return
         await refresh(interaction, f'Updated <@{player.id}> — {categories[category][0]}: '
-                      f'**{display(category,before[category])} → {display(category,after[category])}**. Audit saved.')
+                      f'**{display(category,before.get(category))} → {display(category,after[category])}**. Audit saved.')
 
     @bot.tree.command(name='admin-remove', description='Remove a player from all rankings (moderators only)')
     @app_commands.guild_only()
     @app_commands.default_permissions(**({} if role_id else {'manage_guild': True}))
     @app_commands.check(authorized)
-    @app_commands.describe(player='Player to remove from all three rankings', reason='Why the entry is being removed',
+    @app_commands.describe(player='Player to remove from all rankings', reason='Why the entry is being removed',
                            confirm='Choose True to confirm removal from all categories')
     async def admin_remove(interaction: discord.Interaction, player: discord.User,
                            reason: app_commands.Range[str, 1, 300], confirm: bool):
@@ -98,7 +103,7 @@ def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_c
         except ValueError as error:
             await interaction.followup.send(str(error), ephemeral=True)
             return
-        await refresh(interaction, f'Removed <@{player.id}> from all three rankings. Audit saved.')
+        await refresh(interaction, f'Removed <@{player.id}> from all rankings. Audit saved.')
 
     async def on_error(interaction, error):
         if isinstance(error, app_commands.MissingPermissions):

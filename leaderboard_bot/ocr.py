@@ -1,6 +1,6 @@
 """Local OCR. Unknown suffixes and conflicting readings fail closed."""
 import io, os, re
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from difflib import SequenceMatcher
 from collections import defaultdict
 from PIL import Image, ImageOps, ImageEnhance
@@ -17,7 +17,34 @@ def number(text, money=False):
     value,suffix=match.groups()
     if suffix not in SUFFIXES or (not money and (suffix or '.' in value)):
         raise OCRFailure('Unknown suffix or invalid count')
-    return int(Decimal(value) * (10 ** SUFFIXES[suffix]))
+    with localcontext() as context:
+        context.prec=max(100,len(value)+SUFFIXES[suffix]+4)
+        amount=Decimal(value) * (10 ** SUFFIXES[suffix])
+        if amount!=amount.to_integral_value():raise OCRFailure('Fractional base units are unsupported')
+        return int(amount)
+
+def playtime_seconds(text):
+    # O/0 confusion is normalized only inside the strictly structured time field.
+    text=re.sub(r'\s+','',text).lower().replace('o','0')
+    match=re.fullmatch(r'(\d+)d(\d{1,2})h(\d{1,2})m(\d{1,2})s',text)
+    if not match:raise OCRFailure('Invalid playtime; expected 03d 09h 41m 30s')
+    days,hours,minutes,seconds=map(int,match.groups())
+    if hours>=24 or minutes>=60 or seconds>=60:raise OCRFailure('Invalid playtime units')
+    return days*86400+hours*3600+minutes*60+seconds
+
+
+def merge_screenshots(results):
+    if not 1 <= len(results) <= 2:raise OCRFailure('Attach one or two screenshots per message')
+    if len(results)==1:return results[0]
+    names=[result.get('username') for result in results]
+    if not names[0] or names[0]!=names[1]:
+        raise OCRFailure('Both screenshots must show the same Player Stats username')
+    combined={'username':names[0]}
+    for result in results:
+        for key,value in result.items():
+            if key!='username':combined[key]=max(combined.get(key,value),value)
+    return combined
+
 
 def panel_regions(original):
     """Locate wide green header candidates; derive bounded crops from their geometry."""
@@ -96,6 +123,9 @@ def extract(data):
     except Exception as e:
         raise OCRFailure('Unreadable image') from e
     original.thumbnail((2600,2600))
+    from player_panel import extract_player_panel
+    modern=extract_player_panel(original)
+    if modern is not None:return modern
     gray=ImageOps.grayscale(original)
     variants=[original, original.resize((original.width*2,original.height*2)), ImageEnhance.Contrast(gray).enhance(2), gray.resize((gray.width*2,gray.height*2))]
     found=defaultdict(list)

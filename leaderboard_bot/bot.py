@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 from dotenv import load_dotenv
-from ocr import extract,OCRFailure,SUFFIXES
+from ocr import extract,OCRFailure,SUFFIXES,merge_screenshots
 from store import Store
 from admin_commands import register_admin
 from audit_channel import AuditChannel
@@ -17,13 +17,20 @@ if ADMIN_ROLE < 0 or AUDIT_CHANNEL < 0 or ADMIN_ROLE == GUILD:
     raise ValueError('Use valid role/channel IDs; @everyone cannot be the admin role.')
 HISTORY_HOURS=int(os.getenv('HISTORY_LOOKBACK_HOURS') or '72')
 DB=Store(os.getenv('DATABASE_PATH','data/leaderboard.sqlite3'))
-META={'packs':('📦 Packs Opened',0xE5B83B),'money':('💰 Total Money Earned',0x2ECC71),'coins':('🪙 Grade Coins Earned',0x9B59B6)}
+META={'packs':('📦 Packs Opened',0xE5B83B),'money':('💰 Money Earned',0x2ECC71),'coins':('🪙 Grade Coins',0x9B59B6),'shiny':('✨ Shiny Cards',0x3498DB),'playtime':('⏱️ Total Playtime',0xE67E22)}
 def display(key,value):
+    if value is None:return 'Not recorded'
+    if key=='playtime':
+        days,seconds=divmod(value,86400);hours,seconds=divmod(seconds,3600);minutes,seconds=divmod(seconds,60)
+        return f'{days:02d}d {hours:02d}h {minutes:02d}m {seconds:02d}s'
     if key!='money': return f'{value:,}'
     for suffix,power in reversed(list(SUFFIXES.items())):
         if value>=10**power:
             return '$'+format(Decimal(value)/Decimal(10**power),'.3f').rstrip('0').rstrip('.')+suffix
     return '$0'
+def player_label(user,name):
+    return f'{discord.utils.escape_markdown(discord.utils.escape_mentions(name))} (<@{user}>)'
+
 class Bot(discord.Client):
     def __init__(self):
         intents=discord.Intents.default(); intents.message_content=True
@@ -67,11 +74,14 @@ class Bot(discord.Client):
                     await self.reaction(msg,'❌',True)
                     await self.reaction(msg,'✅')
                     continue
-                a=msg.attachments[0]
-                if a.size>15*1024*1024: raise OCRFailure('Image exceeds 15 MB')
-                if not a.filename.lower().endswith(('.png','.jpg','.jpeg','.webp')): raise OCRFailure('Use PNG, JPG or WebP')
-                values=await asyncio.to_thread(extract,await a.read())
-                DB.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,values)
+                if not 1<=len(msg.attachments)<=2:raise OCRFailure('Attach one or two screenshots per message')
+                results=[]
+                for a in msg.attachments:
+                    if a.size>15*1024*1024:raise OCRFailure('Image exceeds 15 MB')
+                    if not a.filename.lower().endswith(('.png','.jpg','.jpeg','.webp')):raise OCRFailure('Use PNG, JPG or WebP')
+                    results.append(await asyncio.to_thread(extract,await a.read()))
+                values=merge_screenshots(results)
+                DB.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,values,submitted_at=msg.created_at)
                 await self.reaction(msg,'❌',True)
                 await self.reaction(msg,'✅')
                 try: await self.boards()
@@ -84,7 +94,7 @@ class Bot(discord.Client):
                 try: await audit_log.flush()
                 except Exception: logging.exception('Failure report queued; audit channel delivery will retry')
                 if not job.replay:
-                    try: await msg.reply('Could not process this image. Please upload one clearer screenshot with all three stats visible.',mention_author=False)
+                    try: await msg.reply('Could not process this image. Please upload a clearer Stats screenshot; for the new panel keep the username, Money Earned and Grade Coins visible. You may attach two matching scroll views.',mention_author=False)
                     except discord.HTTPException: pass
             finally:
                 await self.reaction(msg,'⏳',True); self.submissions.done(job)
@@ -94,7 +104,7 @@ class Bot(discord.Client):
             if channel.guild.id!=GUILD: raise ValueError('Leaderboard channel belongs to another server')
             for key,(title,color) in META.items():
                 all_rows=DB.ranked(key); rows=all_rows[:10]
-                lines=[f'**{1+sum(r[2]>v for r in all_rows)}.** <@{u}> — **{display(key,v)}**' for u,n,v in rows]
+                lines=[f'**{1+sum(r[2]>v for r in all_rows)}.** {player_label(u,n)} — **{display(key,v)}**' for u,n,v in rows]
                 embed=discord.Embed(title=title+' — Top 10',description='\n'.join(lines) or 'No submissions yet.',color=color)
                 embed.set_footer(text='All-time personal bests • /rank • /leaderboard')
                 mid=DB.board(key); message=None
@@ -120,10 +130,11 @@ class Bot(discord.Client):
     @refresh.before_loop
     async def before_refresh(self): await self.wait_until_ready()
 bot=Bot()
-@bot.tree.command(description='View your personal standings in all three categories')
+@bot.tree.command(description='View your personal standings across all tracked statistics')
 @app_commands.guild_only()
 async def rank(interaction:discord.Interaction):
-    lines=[]
+    epic=DB.identity(interaction.user.id)
+    lines=['**Player: '+discord.utils.escape_markdown(discord.utils.escape_mentions(epic))+'**'] if epic else []
     for key,(title,_) in META.items():
         rows=DB.ranked(key); found=next(((i,u,n,v) for i,(u,n,v) in enumerate(rows,1) if u==str(interaction.user.id)),None)
         if found:
@@ -136,7 +147,7 @@ async def rank(interaction:discord.Interaction):
 @app_commands.guild_only()
 async def leaderboard(interaction:discord.Interaction,category:str='packs',page:app_commands.Range[int,1,100000]=1):
     rows=DB.ranked(category); start=(page-1)*10
-    lines=[f'{1+sum(r[2]>v for r in rows)}. <@{u}> — {display(category,v)}' for u,n,v in rows[start:start+10]]
+    lines=[f'{1+sum(r[2]>v for r in rows)}. {player_label(u,n)} — {display(category,v)}' for u,n,v in rows[start:start+10]]
     await interaction.response.send_message(f'**{META[category][0]} — Page {page}**\n'+('\n'.join(lines) or 'No players on this page.'),ephemeral=True)
 audit_log=AuditChannel(bot, DB, GUILD, AUDIT_CHANNEL, META, display)
 register_admin(bot, DB, GUILD, META, display, role_id=ADMIN_ROLE,

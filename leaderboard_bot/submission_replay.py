@@ -57,14 +57,14 @@ class SubmissionReplay:
             return False
         if msg.id in self.inflight or (replay and msg.id in self.history_enqueued):
             return False
-        if len(msg.attachments) != 1:
+        if not 1 <= len(msg.attachments) <= 2:
             if not replay:
-                self.store.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,error='Please attach one screenshot per message.')
+                self.store.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,error='Please attach one or two screenshots per message.')
                 await self.bot.reaction(msg, '❌')
-                await msg.reply('Please attach one screenshot per message.', mention_author=False)
+                await msg.reply('Please attach one or two screenshots per message.', mention_author=False)
             return False
         # Backfill only supported images. New uploads retain the worker's validation feedback.
-        if replay and not msg.attachments[0].filename.lower().endswith(IMAGE_EXTENSIONS):
+        if replay and not all(a.filename.lower().endswith(IMAGE_EXTENSIONS) for a in msg.attachments):
             return False
         # Reserve the message ID before any await so live/history events cannot queue it twice.
         self.inflight.add(msg.id)

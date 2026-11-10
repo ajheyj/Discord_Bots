@@ -1,23 +1,21 @@
 📸 **HOW TO SUBMIT YOUR LEADERBOARD STATS**
 
-1. Open the game's **Stats** panel.
-2. Make sure all three lines and their values are visible:
-   • **Packs Opened**
-   • **Total Money Earned**
-   • **Total Grade Coins Earned**
-3. Take a clear screenshot and upload it in **#leaderboard-submissions**. Attach **one image per message** using PNG, JPG or WebP (up to 15 MB).
+1. Open **Player Stats** and keep your username below the title visible.
+2. Take a clear screenshot showing **Money Earned**, **Grade Coins Collected**, and at least one other stat.
+3. Upload in **#leaderboard-submissions**. You can attach **one or two images per message** (PNG, JPG or WebP, up to 15 MB each).
 
-A direct screenshot works best. A photo of your screen may work if the text is sharp: keep the camera straight, avoid glare, and make the Stats panel large enough to read. You may crop to the full Stats panel; keep every label and value. Do not edit the numbers. Submit your own stats.
+To capture everything, take the top view with **Packs Opened** and **Shiny Cards Collected**, then scroll down for **Total Playtime**. You may post both views together if they show the same username, or send them separately. Hidden stats keep their previously recorded values. Playtime is optional when off-screen. Both images must be readable if attached together.
 
-**Watch the reaction on your message:**
-⏳ Queued or processing — please wait.
-✅ All three stats were read and saved.
-❌ Couldn't process it — upload a clearer image with all three stats visible.
+A direct screenshot works best. Keep the full panel, username, labels and values. For monitor photos, avoid glare and keep the camera straight. Submit your own stats and do not edit the numbers. Older green Stats screenshots still support their original three numeric stats.
 
-Your highest recorded score in each category is kept. Older or duplicate screenshots do not add scores together or lower your records. Rankings are linked to the Discord account that uploads the image.
+⏳ Queued or processing.
+✅ Visible supported stats were saved.
+❌ Couldn't process the submission—check image clarity and matching usernames.
 
-🏆 **#leaderboard** shows the Top 10 for each category.
-🔎 **/rank** privately shows your position in all three categories.
-📋 **/leaderboard** lets you choose a category and page, including players outside the Top 10.
+Your **Discord account** owns the record. An Epic name change updates the displayed name without creating another player. Scores are independent personal bests, not added totals. Never-recorded hidden stats remain unknown.
 
-After a restart, the bot retries failed or unprocessed images posted within the last 72 hours. Leave your original message in place. Images older than that need a new upload. If a ✅ submission shows the wrong number, tell a server admin and link your original message.
+🏆 **#leaderboard** shows five Top 10 boards.
+🔎 **/rank** shows your personal standings.
+📋 **/leaderboard** browses any category/page.
+
+After a restart, failed/unprocessed images from the last 72 hours are retried. Keep originals available. Already-successful messages aren't re-read for new fields; post a fresh image if needed. Report any accepted wrong value to an admin with the original message link.

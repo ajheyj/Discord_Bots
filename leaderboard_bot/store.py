@@ -2,6 +2,8 @@ import sqlite3,json
 from datetime import datetime,timezone
 from pathlib import Path
 
+STAT_KEYS=('packs','money','coins','shiny','playtime')
+
 class Store:
     def __init__(self,path):
         Path(path).parent.mkdir(parents=True,exist_ok=True)
@@ -16,22 +18,61 @@ class Store:
         CREATE TABLE IF NOT EXISTS submission_failures(id INTEGER PRIMARY KEY AUTOINCREMENT,
         message TEXT NOT NULL,user TEXT NOT NULL,url TEXT NOT NULL,time TEXT NOT NULL,
         reason TEXT NOT NULL,delivered_message TEXT,UNIQUE(message,reason));''')
+        # Additive migration: keep every existing Discord-keyed score and audit.
+        columns={row[1] for row in self.db.execute('PRAGMA table_info(scores)')}
+        for key in ('shiny','playtime'):
+            if key not in columns:self.db.execute('ALTER TABLE scores ADD COLUMN '+key+' TEXT')
+        self.db.executescript('''CREATE TABLE IF NOT EXISTS player_profiles(
+            user TEXT PRIMARY KEY,epic_name TEXT NOT NULL,observed_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS player_names(user TEXT,name TEXT,first_seen TEXT,last_seen TEXT,
+            PRIMARY KEY(user,name));''')
+        self.db.commit()
+
     def seen(self,message):
         return self.db.execute('SELECT 1 FROM audit WHERE message=? AND status="ok"',(str(message),)).fetchone() is not None
-    def record(self,message,user,name,url,values=None,error=None):
+    def record(self,message,user,name,url,values=None,error=None,submitted_at=None):
+        numeric={key:value for key,value in (values or {}).items() if key in STAT_KEYS}
+        if values and (not numeric or any(type(v) is not int or v<0 for v in numeric.values())):
+            raise ValueError('Provide at least one nonnegative integer statistic.')
+        epic=(values or {}).get('username')
+        if epic is not None and (not isinstance(epic,str) or not 1<=len(epic.strip())<=64):
+            raise ValueError('Invalid Epic display name.')
+        timestamp=submitted_at or datetime.now(timezone.utc)
+        if timestamp.tzinfo is None:timestamp=timestamp.replace(tzinfo=timezone.utc)
+        observed=timestamp.astimezone(timezone.utc).isoformat(timespec='microseconds')
         with self.db:
-            if values:
-                old=self.db.execute('SELECT packs,money,coins FROM scores WHERE user=?',(str(user),)).fetchone()
-                vals=[max(values[k],int(old[i]) if old else 0) for i,k in enumerate(('packs','money','coins'))]
-                self.db.execute('INSERT OR REPLACE INTO scores VALUES(?,?,?,?,?)',(str(user),name,*map(str,vals)))
-            self.db.execute('INSERT OR REPLACE INTO audit VALUES(?,?,?,?,?,?)',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),'ok' if values else 'failed',json.dumps(values) if values else error))
-            if not values:
+            if numeric:
+                old=self.db.execute('SELECT '+','.join(STAT_KEYS)+' FROM scores WHERE user=?',(str(user),)).fetchone()
+                vals=[]
+                for i,key in enumerate(STAT_KEYS):
+                    previous=int(old[i]) if old and old[i] is not None else None
+                    new=numeric.get(key)
+                    value=max(previous,new) if previous is not None and new is not None else previous if new is None else new
+                    vals.append(str(value) if value is not None else None)
+                self.db.execute('''INSERT OR REPLACE INTO scores(user,name,packs,money,coins,shiny,playtime)
+                    VALUES(?,?,?,?,?,?,?)''',(str(user),name,*vals))
+                if epic:
+                    self.db.execute('''INSERT INTO player_names VALUES(?,?,?,?) ON CONFLICT(user,name)
+                        DO UPDATE SET first_seen=min(first_seen,excluded.first_seen),last_seen=max(last_seen,excluded.last_seen)''',
+                        (str(user),epic,observed,observed))
+                    self.db.execute('''INSERT INTO player_profiles VALUES(?,?,?) ON CONFLICT(user) DO UPDATE
+                        SET epic_name=excluded.epic_name,observed_at=excluded.observed_at
+                        WHERE excluded.observed_at>=player_profiles.observed_at''',(str(user),epic,observed))
+            self.db.execute('INSERT OR REPLACE INTO audit VALUES(?,?,?,?,?,?)',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),'ok' if numeric else 'failed',json.dumps(values) if numeric else error))
+            if not numeric:
                 self.db.execute('''INSERT OR IGNORE INTO submission_failures(message,user,url,time,reason)
                     VALUES(?,?,?,?,?)''',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),str(error or 'Submission failed.')[:500]))
+
     def ranked(self,key):
-        if key not in ('packs','money','coins'): raise ValueError(key)
-        rows=self.db.execute('SELECT user,name,'+key+' FROM scores').fetchall()
+        if key not in STAT_KEYS:raise ValueError(key)
+        rows=self.db.execute('SELECT s.user,COALESCE(p.epic_name,s.name),s.'+key+
+            ' FROM scores s LEFT JOIN player_profiles p ON p.user=s.user WHERE s.'+key+' IS NOT NULL').fetchall()
         return sorted([(u,n,int(v)) for u,n,v in rows],key=lambda row:(-row[2],int(row[0])))
+
+    def identity(self,user):
+        row=self.db.execute('SELECT epic_name FROM player_profiles WHERE user=?',(str(user),)).fetchone()
+        return row[0] if row else None
+
     def board(self,key):
         row=self.db.execute('SELECT message FROM boards WHERE category=?',(key,)).fetchone()
         return int(row[0]) if row else None
@@ -43,15 +84,15 @@ class Store:
         if not isinstance(reason,str) or not 1 <= len(reason.strip()) <= 300:
             raise ValueError('Provide a reason between 1 and 300 characters.')
         if category is not None:
-            if category not in ('packs','money','coins'):
+            if category not in STAT_KEYS:
                 raise ValueError('Unknown category.')
             if type(value) is not int or not 0 <= value < 10**60:
                 raise ValueError('Score must be a nonnegative integer below 10^60.')
         with self.db:
-            row=self.db.execute('SELECT packs,money,coins FROM scores WHERE user=?',(str(user),)).fetchone()
+            row=self.db.execute('SELECT '+','.join(STAT_KEYS)+' FROM scores WHERE user=?',(str(user),)).fetchone()
             if row is None:
                 raise ValueError('That player has no recorded scores.')
-            before=dict(zip(('packs','money','coins'),map(int,row)))
+            before={key:int(value) for key,value in zip(STAT_KEYS,row) if value is not None}
             after=None if category is None else {**before,category:value}
             if category is None:
                 self.db.execute('DELETE FROM scores WHERE user=?',(str(user),))

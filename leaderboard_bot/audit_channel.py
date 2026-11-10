@@ -19,10 +19,10 @@ class AuditChannel:
                               timestamp=datetime.fromisoformat(time))
         embed.add_field(name='Moderator', value=f'<@{actor}>\nID: {actor}')
         embed.add_field(name='Player', value=f'<@{user}>\nID: {user}')
-        keys = (category,) if category else ('packs', 'money', 'coins')
+        keys = (category,) if category else tuple(key for key in before if key in self.categories)
         for key in keys:
             # Show the exact stored integers as well as the abbreviated display.
-            old = f'{self.display(key,before[key])} (exact: {before[key]})'
+            old = f'{self.display(key,before[key])} (exact: {before[key]})' if key in before else 'Not recorded'
             new = f'{self.display(key,after[key])} (exact: {after[key]})' if after else 'Removed'
             embed.add_field(name=self.categories[key][0], value=f'Before: {old}\nAfter: {new}', inline=False)
         embed.add_field(name='Reason', value=discord.utils.escape_markdown(reason), inline=False)

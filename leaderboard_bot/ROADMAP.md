@@ -23,6 +23,10 @@ Saved November 2, 2026. These are proposed future improvements unless marked oth
 
 ## Existing capabilities to preserve
 
-Three all-time personal-best leaderboards; /rank and paginated /leaderboard; one uploaded image per submission; success/failure/processing reactions; persistent scores; systemd operation on container 205; role-configured admin corrections/removals; durable admin audit-channel delivery. Admin overrides do not block a subsequent screenshot from raising the score or re-adding a removed user.
+Five all-time personal-best leaderboards (packs, money, coins, shiny cards and playtime); /rank and paginated /leaderboard; one or two matching Player Stats scroll views per submission; success/failure/processing reactions; persistent scores; systemd operation on container 205; role-configured admin corrections/removals; durable admin audit-channel delivery. Admin overrides do not block a subsequent screenshot from raising the score or re-adding a removed user.
 
 Suggested next work after stabilizing OCR: automatic backups, then durable screenshot submission recovery.
+
+## Player Stats update implemented
+
+The blue Player Stats layout now supplies an OCR username, optional off-screen fields, shiny-card counts and structured playtime. Permanent Discord user IDs own score rows; a mutable latest-observed Epic name and alias history do not create duplicate score records. Old-message replay cannot overwrite a name observed in a newer message. Matching two-view submissions merge per-category maxima atomically. Epic ownership and image capture time are not verified.

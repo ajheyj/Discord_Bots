@@ -47,7 +47,7 @@ HISTORY_LOOKBACK_HOURS=72
 | `DISCORD_TOKEN` | Private bot token; never commit/share it |
 | `GUILD_ID` | Server ID; all channels and the role must belong to this server |
 | `SUBMISSIONS_CHANNEL_ID` | Text channel to watch and scan on startup |
-| `LEADERBOARD_CHANNEL_ID` | Text channel for the three Top 10 messages |
+| `LEADERBOARD_CHANNEL_ID` | Text channel for the five Top 10 messages |
 | `DATABASE_PATH` | SQLite file; default is relative to the bot working directory |
 | `ADMIN_ROLE_ID` | Optional exact moderator role; 0/blank/unset uses Manage Server permission |
 | `AUDIT_CHANNEL_ID` | Optional existing audit text channel; 0/blank/unset disables channel delivery |
@@ -109,7 +109,7 @@ If the repository is already installed, use the update section instead of clonin
 .venv/bin/python bot.py
 ```
 
-Expect 52 tests with three optional private-image tests skipped unless you supply their fixtures. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
+Expect 71 tests with five optional private-image tests skipped unless you supply their fixtures. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
 
 ### Run as a service
 
@@ -177,8 +177,8 @@ For managed cloud workers, set secrets as environment variables and mount a writ
 
 ## Check the installation
 
-- Bot online; three messages appear in the leaderboard channel. Pin them manually if necessary.
-- Submit one clear screenshot. Expect ⏳ then ✅; compare all three stored values with the image. Test a bad image and confirm ❌ without a score update.
+- Bot online; five messages appear in the leaderboard channel. Pin them manually if necessary.
+- Submit one clear Player Stats screenshot, or two matching scroll views. Expect ⏳ then ✅; compare the header username and every visible value with the saved result. Off-screen fields should retain their prior values. Test a bad image and confirm ❌ without a score update.
 - `/rank` and `/leaderboard` work for players, including players outside the Top 10.
 - A moderator can correct a test player's score with `/admin-set`, including setting it to its existing value with reason `Audit test`. Verify a member without the required role/permission is denied.
 - `/admin-remove ... confirm:False` cancels; test confirmed removal only on disposable scores. There is no undo command.
@@ -202,6 +202,29 @@ grep -E '^(ADMIN_ROLE_ID|AUDIT_CHANNEL_ID|HISTORY_LOOKBACK_HOURS)=' .env
 journalctl -u leaderboard-bot -n 80 --no-pager -l
 ```
 
+## Player Stats layout and safe migration
+
+The bot reads the username directly below **Player Stats**, plus the visible packs, money, grade coins, shiny cards and playtime. Keep Money Earned, Grade Coins and at least one additional stat visible in each new-layout image. The top and scrolled views can be submitted together (one or two images per message, each <=15 MB), but their header names must match exactly. An unreadable/mismatched view rejects both; separate messages work too.
+
+Discord user ID remains the permanent key. Names change without duplicating scores; all boards display the latest accepted Epic name alongside the Discord mention. Missing/off-screen values retain previous maxima, and never-recorded fields remain unknown. A scrolled view may omit packs. Playtime is optional when off-screen, is stored as seconds and ranked by greatest recorded duration. Numeric changes still retain independent maxima. This does not verify Epic account ownership.
+
+No .env settings or new dependencies are added beyond the already-installed OpenCV OCR fix. Follow the update procedure below, especially its **database backup**. Startup adds nullable shiny/playtime columns and profile/name-history tables, keeps existing scores and public-board IDs, and creates two extra leaderboard messages. This migration requires a matching old database backup for rollback to pre-upgrade code; do not simply switch old code onto the new schema.
+
+Test these values from the supplied new screenshots:
+
+| Field | Expected |
+|---|---|
+| Username | CROSSBAR_CHRIS |
+| Packs | 9,057 (top view) |
+| Money | $34.7Qi |
+| Grade coins | 986 |
+| Shiny cards | 6 |
+| Playtime | 03d 09h 41m 30s (scrolled view), stored as 294090 seconds |
+
+Existing successful messages are skipped by the 72-hour recovery even if new fields were previously unavailable. Submit a new screenshot to populate those fields; previously failed recent images are eligible for retry. A new Epic name is adopted using the screenshot message's posting time, not the unverified image capture date. Profiles/history remain attached to one Discord ID; there is no automatic merging between different Discord accounts.
+
+Use `/admin-set` for shiny cards or playtime corrections just like the other categories. Playtime accepts either a duration such as `03d09h41m30s` or integer seconds. The audit channel includes those corrections. An old record with no new metric displays Not recorded until its first value arrives.
+
 ## Updating an existing Debian installation
 
 Commit changes to the repository first. Run inside the guest as root, one command at a time. Stop and inspect any failure before continuing:
@@ -219,7 +242,7 @@ cd leaderboard_bot
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 52 discovered, 49 pass, 3 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. The startup migrations add required audit tables without deleting existing records. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
+Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 71 discovered, 66 pass, 5 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. Startup migrations preserve existing data and add audit/profile tables plus nullable shiny/playtime score columns. Back up the database before starting this version. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
 
 ```sh
 chown -R leaderboard:leaderboard /opt/Discord_Bots/leaderboard_bot
@@ -257,7 +280,7 @@ docker compose up -d
 
 Back up existing volume data before restoration. If changing archive layouts/versions, verify restored contents before starting; extracting overlays files rather than deleting unrelated files.
 
-For code rollback in a clean Git checkout: stop the service, enter `/opt/Discord_Bots` and run `git switch --detach PREVIOUS_COMMIT`, replacing the placeholder with the commit recorded before updating. Restart only after checking that version's dependencies/settings. Return with `git switch main` when ready. Earlier versions ignore the extra audit tables; saved score corrections/recoveries remain unless you separately restore data. Do not use a destructive reset to solve an unknown update failure.
+For code rollback in a clean Git checkout: stop the service, enter `/opt/Discord_Bots` and run `git switch --detach PREVIOUS_COMMIT`, replacing the placeholder with the commit recorded before updating. Restart only after checking that version's dependencies/settings. Return with `git switch main` when ready. The new shiny/playtime columns make a direct rollback to older code unsafe: older score inserts assumed the five-column schema. Restore the matching pre-upgrade database backup while stopped if reverting to that code; this discards post-backup submissions and new metrics. Keep the current database as another backup before replacing it. Code-only rollback is not sufficient for this migration. Do not use a destructive reset to solve an unknown update failure.
 
 ## Inspect local admin audit history
 
@@ -286,7 +309,7 @@ cd /opt/Discord_Bots/leaderboard_bot
 .venv/bin/python ocr.py "/path/to/image.png"
 ```
 
-It prints the three integer values or a failure. Re-saving/compressing an image can change the result. In `ocr.py`, update LABELS for renamed labels, SUFFIXES only after verifying a new notation, or the extraction/panel preprocessing for layout/font/color changes. Current extraction expects label/colon/value on the same OCR line. A panel moving alone normally needs no edit. Do not weaken confidence/consistency checks just to force one image through; compare known images and unreadable cases. Edit the repository too so reinstallations retain the fix.
+It prints known numeric values plus the new-layout username, or a failure. Playtime is returned in seconds; off-screen fields are absent. Re-saving/compressing an image can change the result. For the legacy UI, `ocr.py` contains LABELS and the old colon-based extraction. For the new blue UI, `player_panel.py` contains ALIASES and detected header/row/value-box processing. Update SUFFIXES in `ocr.py` only after verifying a notation. New rows are associated geometrically; a colon is not required. A panel moving alone normally needs no edit. Do not weaken confidence/consistency checks just to force one image through; compare known images and unreadable cases. Edit the repository too so reinstallations retain the fix.
 
 | Problem | Checks |
 |---|---|
