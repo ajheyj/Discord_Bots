@@ -79,7 +79,7 @@ class ReplayTests(unittest.IsolatedAsyncioTestCase):
         cases=[message(i) for i in range(1,7)]
         cases[0].author.bot=True;cases[1].guild.id=100;cases[2].channel.id=124
         cases[3].attachments=[];cases[4].attachments[0].filename='file.txt'
-        cases[5].attachments.append(cases[5].attachments[0])
+        cases[5].attachments.extend([cases[5].attachments[0],cases[5].attachments[0]])
         for msg in cases:self.assertFalse(await self.replay.enqueue(msg,replay=True))
         self.assertTrue(self.replay.queue.empty())
         for msg in cases:msg.reply.assert_not_awaited()
@@ -170,9 +170,10 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.close();self.log_patch.stop();self.store_patch.stop();self.store.db.close();self.temp.cleanup()
     async def run_job(self,msg,replay,result=None,error=None):
         await self.bot.submissions.enqueue(msg,replay=replay)
+        results=list(result) if isinstance(result,list) else None
         def extract(_):
             if error:raise error
-            return result
+            return results.pop(0) if results is not None else result
         with patch.object(self.module,'extract',side_effect=extract):
             task=asyncio.create_task(self.bot.work())
             try:await asyncio.wait_for(self.bot.queue.join(),3)
@@ -198,5 +199,25 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs(level='ERROR'):await self.run_job(msg,False,error=OCRFailure('Unreadable image'))
         msg.reply.assert_awaited_once()
         self.assertEqual(len(self.store.pending_submission_failures()),1)
+
+    async def test_two_scroll_views_update_one_discord_user(self):
+        msg=message()
+        msg.attachments.append(msg.attachments[0])
+        one=dict(username='CROSSBAR_CHRIS',packs=9057,money=347*10**17,coins=986,shiny=6)
+        two=dict(username='CROSSBAR_CHRIS',money=347*10**17,coins=986,shiny=6,playtime=294090)
+        await self.run_job(msg,True,result=[one,two])
+        self.assertEqual(self.store.ranked('packs'),[('20','CROSSBAR_CHRIS',9057)])
+        self.assertEqual(self.store.ranked('playtime')[0][2],294090)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM scores').fetchone()[0],1)
+        self.assertTrue(self.store.seen(msg.id))
+    async def test_mismatched_two_images_rejects_without_partial_save(self):
+        msg=message();msg.attachments.append(msg.attachments[0])
+        one=dict(username='ONE',packs=9057,money=100,coins=10)
+        two=dict(username='TWO',money=100,coins=10,playtime=99)
+        with self.assertLogs(level='ERROR'):await self.run_job(msg,True,result=[one,two])
+        self.assertFalse(self.store.seen(msg.id))
+        self.assertEqual(self.store.ranked('packs'),[])
+        self.assertIsNone(self.store.identity(msg.author.id))
+        self.assertIn('same Player Stats username',self.store.pending_submission_failures()[0][-1])
 
 if __name__=='__main__':unittest.main()
