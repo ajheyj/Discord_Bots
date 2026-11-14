@@ -3,7 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr t
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY bot.py ocr.py store.py admin_commands.py audit_channel.py submission_replay.py player_panel.py ./
+COPY dm_submissions.py submission_results.py bot.py ocr.py store.py admin_commands.py audit_channel.py submission_replay.py player_panel.py queue_config.py durable_jobs.py storage_tools.py durable_service.py ocr_process.py ocr_runner.py ./
 RUN useradd -m bot && mkdir /app/data && chown bot:bot /app/data
 USER bot
 CMD ["python", "bot.py"]

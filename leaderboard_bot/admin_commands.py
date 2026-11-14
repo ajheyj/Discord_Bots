@@ -35,7 +35,7 @@ def parse_score(category, text):
         return int(value)
 
 
-def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_channel=None):
+def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_channel=None, queue_status=None):
     async def authorized(interaction):
         if interaction.guild_id != guild_id:
             raise app_commands.CheckFailure('Use this command in the configured server.')
@@ -105,6 +105,14 @@ def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_c
             return
         await refresh(interaction, f'Removed <@{player.id}> from all rankings. Audit saved.')
 
+    if queue_status is not None:
+        @bot.tree.command(name='queue',description='View durable queue, storage and backup health (moderators only)')
+        @app_commands.guild_only()
+        @app_commands.default_permissions(**({} if role_id else {'manage_guild': True}))
+        @app_commands.check(authorized)
+        async def queue(interaction:discord.Interaction):
+            await interaction.response.send_message(queue_status(),ephemeral=True)
+
     async def on_error(interaction, error):
         if isinstance(error, app_commands.MissingPermissions):
             text = 'You need Manage Server permission to use this command.'
@@ -120,3 +128,4 @@ def register_admin(bot, store, guild_id, categories, display, role_id=0, audit_c
 
     admin_set.error(on_error)
     admin_remove.error(on_error)
+    if queue_status is not None:queue.error(on_error)

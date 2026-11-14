@@ -1,13 +1,20 @@
 import sqlite3,json
 from datetime import datetime,timezone
 from pathlib import Path
+from contextlib import nullcontext
 
 STAT_KEYS=('packs','money','coins','shiny','playtime')
 
 class Store:
     def __init__(self,path):
+        if not str(path).strip() or str(path).strip()==':memory:':
+            raise ValueError('DATABASE_PATH must name a persistent database file.')
+        self.path=Path(path).resolve()
         Path(path).parent.mkdir(parents=True,exist_ok=True)
-        self.db=sqlite3.connect(path)
+        self.db=sqlite3.connect(self.path,timeout=10)
+        self.db.execute('PRAGMA journal_mode=WAL')
+        self.db.execute('PRAGMA synchronous=FULL')
+        self.db.execute('PRAGMA busy_timeout=10000')
         self.db.executescript('''CREATE TABLE IF NOT EXISTS scores(user TEXT PRIMARY KEY,name TEXT,packs TEXT,money TEXT,coins TEXT);
         CREATE TABLE IF NOT EXISTS audit(message TEXT PRIMARY KEY,user TEXT,url TEXT,time TEXT,status TEXT,details TEXT);
         CREATE TABLE IF NOT EXISTS boards(category TEXT PRIMARY KEY,message TEXT);
@@ -26,11 +33,18 @@ class Store:
             user TEXT PRIMARY KEY,epic_name TEXT NOT NULL,observed_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS player_names(user TEXT,name TEXT,first_seen TEXT,last_seen TEXT,
             PRIMARY KEY(user,name));''')
+        self.db.executescript("""CREATE TABLE IF NOT EXISTS submission_results(
+            message TEXT PRIMARY KEY,user TEXT NOT NULL,url TEXT NOT NULL,time TEXT NOT NULL,
+            payload TEXT NOT NULL,delivered_message TEXT,dm_status TEXT);
+            CREATE TABLE IF NOT EXISTS dm_sessions(user TEXT PRIMARY KEY,expires REAL NOT NULL);""")
         self.db.commit()
 
     def seen(self,message):
         return self.db.execute('SELECT 1 FROM audit WHERE message=? AND status="ok"',(str(message),)).fetchone() is not None
-    def record(self,message,user,name,url,values=None,error=None,submitted_at=None):
+    def record(self,message,user,name,url,values=None,error=None,submitted_at=None,transaction=True):
+        if error is not None:
+            prior=self.db.execute('SELECT status,details FROM audit WHERE message=?',(str(message),)).fetchone()
+            if prior==('failed',error):return
         numeric={key:value for key,value in (values or {}).items() if key in STAT_KEYS}
         if values and (not numeric or any(type(v) is not int or v<0 for v in numeric.values())):
             raise ValueError('Provide at least one nonnegative integer statistic.')
@@ -40,7 +54,8 @@ class Store:
         timestamp=submitted_at or datetime.now(timezone.utc)
         if timestamp.tzinfo is None:timestamp=timestamp.replace(tzinfo=timezone.utc)
         observed=timestamp.astimezone(timezone.utc).isoformat(timespec='microseconds')
-        with self.db:
+        with (self.db if transaction else nullcontext()):
+            before=self.score_values(user)
             if numeric:
                 old=self.db.execute('SELECT '+','.join(STAT_KEYS)+' FROM scores WHERE user=?',(str(user),)).fetchone()
                 vals=[]
@@ -59,6 +74,12 @@ class Store:
                         SET epic_name=excluded.epic_name,observed_at=excluded.observed_at
                         WHERE excluded.observed_at>=player_profiles.observed_at''',(str(user),epic,observed))
             self.db.execute('INSERT OR REPLACE INTO audit VALUES(?,?,?,?,?,?)',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),'ok' if numeric else 'failed',json.dumps(values) if numeric else error))
+            payload={'recognized':numeric,'before':before,'after':self.score_values(user),
+                     'username':epic,'warnings':(values or {}).get('_warnings',[]),'error':error if not numeric else None}
+            self.db.execute("""INSERT INTO submission_results(message,user,url,time,payload) VALUES(?,?,?,?,?)
+                ON CONFLICT(message) DO UPDATE SET payload=excluded.payload,time=excluded.time,
+                delivered_message=NULL,dm_status=NULL""",
+                (str(message),str(user),url,datetime.now(timezone.utc).isoformat(),json.dumps(payload)))
             if not numeric:
                 self.db.execute('''INSERT OR IGNORE INTO submission_failures(message,user,url,time,reason)
                     VALUES(?,?,?,?,?)''',(str(message),str(user),url,datetime.now(timezone.utc).isoformat(),str(error or 'Submission failed.')[:500]))
@@ -125,3 +146,11 @@ class Store:
         with self.db:
             self.db.execute('UPDATE submission_failures SET delivered_message=? WHERE id=?',
                             (str(message_id),failure_id))
+
+    def score_values(self,user):
+        row=self.db.execute('SELECT '+','.join(STAT_KEYS)+' FROM scores WHERE user=?',(str(user),)).fetchone()
+        return {key:int(value) for key,value in zip(STAT_KEYS,row or ()) if value is not None}
+
+    def result(self,message):
+        row=self.db.execute('SELECT payload FROM submission_results WHERE message=?',(str(message),)).fetchone()
+        return json.loads(row[0]) if row else None

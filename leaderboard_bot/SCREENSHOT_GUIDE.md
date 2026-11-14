@@ -1,21 +1,18 @@
-📸 **HOW TO SUBMIT YOUR LEADERBOARD STATS**
+**📊 Submit your leaderboard stats privately**
 
-1. Open **Player Stats** and keep your username below the title visible.
-2. Take a clear screenshot showing **Money Earned**, **Grade Coins Collected**, and at least one other stat.
-3. Upload in **#leaderboard-submissions**. You can attach **one or two images per message** (PNG, JPG or WebP, up to 15 MB each).
+1. Run **/submit** in this server. Only you can see its reply.
+2. Check your DMs from the bot. If it cannot message you, allow direct messages from server members and run /submit again.
+3. Send **one or two screenshots per DM message**. Use PNG, JPG or WebP, up to 15 MB each. Your upload session lasts 24 hours; /submit reopens it.
+4. The bot confirms queueing, then DMs what changed. Busy periods can take a while—avoid duplicate uploads. Use **/submission-result** for your latest completed result if a DM is missing.
 
-To capture everything, take the top view with **Packs Opened** and **Shiny Cards Collected**, then scroll down for **Total Playtime**. You may post both views together if they show the same username, or send them separately. Hidden stats keep their previously recorded values. Playtime is optional when off-screen. Both images must be readable if attached together.
+**What to capture**
+Open the in-game **Player Stats** panel. Include the username below the title and as many stats as possible: packs opened, money earned, grade coins, shiny cards and total playtime. You can send a second scrolled view to show playtime. Both readable names must match. Upload only your own stats.
 
-A direct screenshot works best. Keep the full panel, username, labels and values. For monitor photos, avoid glare and keep the camera straight. Submit your own stats and do not edit the numbers. Older green Stats screenshots still support their original three numeric stats.
+A direct screenshot works best. Keep the panel readable and uncropped; avoid glare, blur and tilted monitor photos.
 
-⏳ Queued or processing.
-✅ Visible supported stats were saved.
-❌ Couldn't process the submission—check image clarity and matching usernames.
+**Partial reads are OK**
+The bot saves each stat it can confidently read. Missing or unreadable fields stay unchanged. Lower values never reduce your saved lifetime bests. The private summary lists changed scores, unchanged bests and fields it could not read. If nothing can be read, it explains the failure without changing your scores.
 
-Your **Discord account** owns the record. An Epic name change updates the displayed name without creating another player. Scores are independent personal bests, not added totals. Never-recorded hidden stats remain unknown.
+Scores belong to your **Discord account**, so changing your Epic name does not create a second entry. **/rank** shows your standings; **/leaderboard** browses rankings privately.
 
-🏆 **#leaderboard** shows five Top 10 boards.
-🔎 **/rank** shows your personal standings.
-📋 **/leaderboard** browses any category/page.
-
-After a restart, failed/unprocessed images from the last 72 hours are retried. Keep originals available. Already-successful messages aren't re-read for new fields; post a fresh image if needed. Report any accepted wrong value to an admin with the original message link.
+**Privacy:** Uploads/results are sent in DMs, but saved scores/names appear on public leaderboards. Moderators can see results and available screenshot copies in the configured audit channel. Report wrong accepted values to a moderator.

@@ -36,13 +36,16 @@ def playtime_seconds(text):
 def merge_screenshots(results):
     if not 1 <= len(results) <= 2:raise OCRFailure('Attach one or two screenshots per message')
     if len(results)==1:return results[0]
-    names=[result.get('username') for result in results]
-    if not names[0] or names[0]!=names[1]:
-        raise OCRFailure('Both screenshots must show the same Player Stats username')
-    combined={'username':names[0]}
+    names={result['username'] for result in results if result.get('username')}
+    if len(names)>1:raise OCRFailure('Both screenshots must show the same Player Stats username')
+    combined={'_warnings':[]}
+    if names:combined['username']=names.pop()
     for result in results:
+        combined['_warnings'].extend(result.get('_warnings',[]))
         for key,value in result.items():
-            if key!='username':combined[key]=max(combined.get(key,value),value)
+            if key in ('packs','money','coins','shiny','playtime'):
+                combined[key]=max(combined.get(key,value),value)
+    if not combined['_warnings']:combined.pop('_warnings')
     return combined
 
 
@@ -101,12 +104,14 @@ def read_variant(variant,found,psm=11):
 
 
 def resolve(found):
-    result={}
+    result={'_warnings':[]}
     for key in LABELS:
         values=found[key]
         if len(values)<2 or len(set(values))!=1:
-            raise OCRFailure('Could not confidently read '+LABELS[key])
-        result[key]=values[0]
+            result['_warnings'].append('Could not confidently read '+LABELS[key])
+        else:result[key]=values[0]
+    if len(result)==1:raise OCRFailure('Could not confidently read any statistics')
+    if not result['_warnings']:result.pop('_warnings')
     return result
 
 
@@ -132,7 +137,8 @@ def extract(data):
     for variant in variants:
         read_variant(variant,found)
     try:
-        return resolve(found)
+        result=resolve(found)
+        if not result.get('_warnings'):return result
     except OCRFailure:
         pass
     # Only try panel processing if the existing full-image path fails.

@@ -61,27 +61,36 @@ def extract_player_panel(image):
         if not any(SequenceMatcher(None,clean(t),'playerstats').ratio()>=.9 for t in readings(title)):
             continue
         name_image=image.crop((x+int(w*.18),y+int(h*.66),x+int(w*.86),y+h-2))
-        name=agree(name_image,username,'Player Stats username')
+        try:name=agree(name_image,username,'Player Stats username')
+        except OCRFailure:name=None
         rows=[r for r in components if .75*w<=r[2]<=1.05*w and .45*h<=r[3]<=1.4*h
               and x-w*.05<=r[0] and r[0]+r[2]<=x+w*1.05
               and y+h<r[1]<y+h*7 and .015<r[4]/(r[2]*r[3])<.35]
-        result={'username':name}
+        result={'_warnings':[]}
+        if name:result['username']=name
+        else:result['_warnings'].append('Could not confidently read Player Stats username; Discord identity retained.')
+        conflicts=set()
         for rx,ry,rw,rh,_ in sorted(rows,key=lambda r:r[1]):
             boxes=[r for r in components if .12*rw<=r[2]<=.42*rw and .3*rh<=r[3]<rh
                    and rx+rw*.55<r[0] and r[0]+r[2]<rx+rw
                    and ry<r[1] and r[1]+r[3]<ry+rh]
-            if not boxes:raise OCRFailure('Could not locate a visible Player Stats value box')
-            vx,vy,vw,vh,_=max(boxes,key=lambda r:r[4])
-            label_image=image.crop((rx+int(rw*.18),ry+int(rh*.1),vx-4,ry+rh-int(rh*.1)))
-            key=agree(label_image,category,'visible Player Stats label',min_conf=0)
-            value_image=image.crop((vx+int(vw*.06),vy+int(vh*.1),vx+vw-int(vw*.06),vy+vh-int(vh*.1)))
-            parser=playtime_seconds if key=='playtime' else lambda text,k=key:number(text,k=='money')
-            value=agree(value_image,parser,ALIASES[key][0])
-            if key in result and result[key]!=value:raise OCRFailure('Conflicting visible '+key+' rows')
-            result[key]=value
-        # Both supported scroll views share these labels; missing packs/playtime are allowed.
-        if 'money' not in result or 'coins' not in result or len(result)<4:
-            raise OCRFailure('Include Money Earned, Grade Coins and at least one other stat')
+            try:
+                if not boxes:continue # Tabs and clipped row borders are not complete value rows.
+                vx,vy,vw,vh,_=max(boxes,key=lambda r:r[4])
+                label_image=image.crop((rx+int(rw*.18),ry+int(rh*.1),vx-4,ry+rh-int(rh*.1)))
+                key=agree(label_image,category,'visible Player Stats label',min_conf=0)
+                value_image=image.crop((vx+int(vw*.06),vy+int(vh*.1),vx+vw-int(vw*.06),vy+vh-int(vh*.1)))
+                parser=playtime_seconds if key=='playtime' else lambda text,k=key:number(text,k=='money')
+                value=agree(value_image,parser,ALIASES[key][0])
+                if key in result and result[key]!=value:
+                    result.pop(key,None);conflicts.add(key)
+                    raise OCRFailure('Conflicting visible '+key+' rows')
+                if key not in conflicts:result[key]=value
+            except OCRFailure as error:
+                result['_warnings'].append(str(error))
+        if not any(key in result for key in ALIASES):
+            raise OCRFailure('Could not confidently read any Player Stats values')
+        if not result['_warnings']:result.pop('_warnings')
         results.append(result)
     if len(results)>1:raise OCRFailure('More than one Player Stats panel found; crop to one player')
     return results[0] if results else None

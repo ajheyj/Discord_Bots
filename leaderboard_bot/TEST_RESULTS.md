@@ -1,6 +1,6 @@
 # Validation results
 
-The sections below record results at each development stage. The latest automated suite has 71 tests (66 pass and five private-image cases skip without fixtures). Earlier counts and guide-length measurements are historical. Current setup instructions are in [INSTALL.md](INSTALL.md), and behavior is described in [README.md](README.md).
+The sections below record results at each development stage. The latest automated suite has 84 tests (79 pass and five private-image cases skip without fixtures) on the build Linux environment. Earlier counts and guide-length measurements are historical. Current setup instructions are in [INSTALL.md](INSTALL.md), and behavior is described in [README.md](README.md).
 
 Tested in the build environment with Python 3.12, discord.py 2.7.1 and installed Tesseract. No live Discord credentials were supplied.
 
@@ -51,3 +51,25 @@ Both new original images read `CROSSBAR_CHRIS`, $34.7Qi, 986 coins and 6 shiny c
 Tests cover Discord-keyed identity across Epic renames, same-name/different-Discord separation, name history, preventing name rollback from older message replay, nullable missing metrics, preserved maxima, exact money values, additive legacy-schema migration/reopen, transaction rollback on a profile write failure, shiny/playtime admin corrections, time parsing/unit bounds, mixed-name rejection, and two-view worker processing without partial saves. Existing roles/audit/replay/OCR tests remain passing. New command definitions load locally with five categories and missing-value/time formatting.
 
 The UI, usernames and label handling remain OCR heuristics, not verified Epic account linking. Confidence/consistency checks can reject clear inputs or repeat the same error. Live five-board creation/pins, production migration/permissions and broad device coverage need server-side verification. Docker copies the new module but a Docker build was not run. Schema rollback requires the matching pre-upgrade database, not just old code.
+
+## Durable queue and resource controls
+
+Built from the deployed Player Stats source at **90ed33c**. Linux automated suite: **84 discovered, 79 passed, 5 optional image tests skipped**. Prior in-memory worker tests were replaced with durable-stage tests; roles, identity, admin edits, audits, history filtering, numeric parsing and existing OCR checks remain covered. No live Discord credentials were used.
+
+The burst test admits **500 distinct users, two synthetic small files each**, interrupts processing at job 125, closes/reopens the database, resumes work, injects temporary download and OCR errors, and deliberately makes every 17th input unreadable. Every accepted job reaches a terminal state: **471 done, 29 failed**, with one OCR coroutine and no more than two downloads active. It verifies original job/user IDs, no duplicate scores, bounded concurrency, retained attempt counts, file cleanup and released storage reservations. It uses fake Discord and fake OCR: it is not a real 1,000-photo throughput, RAM, CPU or Discord-rate-limit benchmark.
+
+Separate subprocess checks verify OMP/OpenCV/BLAS limits are each one and an OCR timeout kills both the parent runner and its descendant process on Linux. Real paired new-layout screenshots also pass through the actual isolated/single-thread runner with `CROSSBAR_CHRIS`, 9,057 packs, $34.7Qi, 986 coins, 6 shiny cards and 294090 playtime seconds. That real-image check is additional to the default suite's skipped private-image fixtures.
+
+Other checks cover committed admission before acknowledgment, duplicate IDs, global/per-user/storage/free-space rejection, persistent stage recovery, finite retry/backoff budgets, crash attempts not resetting budgets, atomic score/job completion rollback, successful-message/admin-correction protection, cached-image processing after source deletion, unchanged-attachment enforcement, partial-download reuse, reaction failures not undoing scores, failure retention cleanup, same-database instance locks, WAL-aware backup integrity/retention and rejection of unsafe storage directories or nonpersistent databases.
+
+Not live-tested: Discord backlog/rate limits, production permissions, queued-reaction delivery, real 500-user traffic, Windows process-tree termination, Docker/cloud deployment, off-host disaster recovery or the full range of image sizes. Cache reservations and backup retention do not guarantee capacity under arbitrary host/disk failures. Automatic DB backups exclude image spools; full recovery of originals deleted from Discord needs a stopped data-directory/volume backup. See [INSTALL.md](INSTALL.md).
+
+## November 14: partial recognition and private DM submissions
+
+Linux suite: **100 discovered, 95 passed, 5 optional private-image fixtures skipped**. Includes the 500-job restart/retry simulation. No live Discord token was used.
+
+The supplied November 14 screenshots passed the actual single-thread OCR runner, individually and together. Both provide CROSSBAR_CHRIS, money 82,200,000,000,000,000,000 ($82.2Qi) and grade coins 1,238. The 14.08.29 view also reads packs 10,169 and conservatively omits its clipped shiny row; the 14.08.05 view reads shiny cards 8 and omits its clipped packs row. Their paired result includes all four numeric stats. Playtime is absent and therefore omitted, preserving any saved value. New Stats/Settings tabs no longer require rejecting otherwise readable rows. Private images are excluded from the update ZIP/repository.
+
+New tests verify independent partial-field acceptance, rejection when no stat is confident, supported-number conflicts remaining omitted, usable-image preservation when another image fails, exact committed before/after snapshots, unchanged/lower/missing values, name chronology, matched-name protection, ephemeral command replies, blocked DMs, private user-scoped result retrieval, session expiry, DM-channel download metadata, missed-DM startup history, notification retries, no new public replies/reactions and cached screenshot copies in audit delivery. Existing queue/backup/role/admin/identity tests remain passing after updating expectations for partial recognition and private delivery.
+
+Not live-verified: actual Discord command sync, DM privacy settings, attachment permissions/limits, API rate limits, production database migration, Windows and Docker. Network ambiguity can duplicate a DM/audit message; scores remain idempotent. Screenshots can be unavailable after cache eviction/expiry, and DM jump links cannot be opened by moderators. Audit channel permissions remain the operator's responsibility. Earlier test sections describe historical versions; this section is the current behavior.

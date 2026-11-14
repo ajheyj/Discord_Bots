@@ -1,4 +1,4 @@
-import asyncio,logging,os
+import asyncio,logging,os,time
 from decimal import Decimal
 import discord
 from discord import app_commands
@@ -8,7 +8,8 @@ from ocr import extract,OCRFailure,SUFFIXES,merge_screenshots
 from store import Store
 from admin_commands import register_admin
 from audit_channel import AuditChannel
-from submission_replay import SubmissionReplay, failure_reason
+from submission_replay import SubmissionReplay
+from queue_config import QueueConfig
 load_dotenv()
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
 GUILD=int(os.environ['GUILD_ID']); SUB=int(os.environ['SUBMISSIONS_CHANNEL_ID']); BOARD=int(os.environ['LEADERBOARD_CHANNEL_ID'])
@@ -36,12 +37,16 @@ class Bot(discord.Client):
         intents=discord.Intents.default(); intents.message_content=True
         super().__init__(intents=intents,allowed_mentions=discord.AllowedMentions.none())
         self.tree=app_commands.CommandTree(self); self.lock=asyncio.Lock()
-        self.submissions=SubmissionReplay(self, DB, GUILD, SUB, hours=HISTORY_HOURS)
-        self.queue=self.submissions.queue
+        self.audit_channel_id=AUDIT_CHANNEL
+        self.config=QueueConfig.from_env(DB.path)
+        self.submissions=SubmissionReplay(self,DB,GUILD,SUB,hours=HISTORY_HOURS,config=self.config)
+        self.boards_dirty=True;self.board_revision=0;self.last_board_check=0
     async def setup_hook(self):
         self.tree.copy_global_to(guild=discord.Object(id=GUILD))
         await self.tree.sync(guild=discord.Object(id=GUILD))
-        self.worker=asyncio.create_task(self.work()); self.refresh.start(); self.audit_refresh.start()
+        self.submissions.pipeline.start()
+        self.refresh.change_interval(seconds=self.config.board_interval)
+        self.refresh.start();self.audit_refresh.start()
         self.history_task=asyncio.create_task(self.submissions.run())
     async def reaction(self,msg,emoji,remove=False):
         try:
@@ -49,55 +54,22 @@ class Bot(discord.Client):
             else: await msg.add_reaction(emoji)
         except discord.HTTPException: logging.warning('Reaction failed for message %s',msg.id)
     async def on_message(self,msg):
+        if not msg.author.bot and msg.guild is None and msg.attachments and not self.submissions.eligible(msg):
+            await self.submissions.private_notice(msg,'Run /submit in the leaderboard server to open a 24-hour private upload session, then send your screenshots here.')
+            return
         await self.submissions.enqueue(msg)
 
+    def mark_scores_changed(self):
+        self.board_revision+=1;self.boards_dirty=True
+
     async def close(self):
-        # Stop producers before the worker when shutting down; the next startup rescans Discord.
-        for name in ('history_task','worker'):
-            task=getattr(self,name,None)
-            if task is not None:
-                task.cancel()
-        pending=[getattr(self,name) for name in ('history_task','worker') if getattr(self,name,None) is not None]
-        if pending:
-            await asyncio.gather(*pending,return_exceptions=True)
-        self.refresh.cancel(); self.audit_refresh.cancel()
+        task=getattr(self,'history_task',None)
+        if task is not None:
+            task.cancel();await asyncio.gather(task,return_exceptions=True)
+        self.refresh.cancel();self.audit_refresh.cancel()
+        await self.submissions.pipeline.close()
         await super().close()
 
-    async def work(self):
-        await self.wait_until_ready()
-        while not self.is_closed():
-            job=await self.queue.get()
-            msg=job.message
-            try:
-                # Re-check the durable success marker immediately before processing.
-                if DB.seen(msg.id):
-                    await self.reaction(msg,'❌',True)
-                    await self.reaction(msg,'✅')
-                    continue
-                if not 1<=len(msg.attachments)<=2:raise OCRFailure('Attach one or two screenshots per message')
-                results=[]
-                for a in msg.attachments:
-                    if a.size>15*1024*1024:raise OCRFailure('Image exceeds 15 MB')
-                    if not a.filename.lower().endswith(('.png','.jpg','.jpeg','.webp')):raise OCRFailure('Use PNG, JPG or WebP')
-                    results.append(await asyncio.to_thread(extract,await a.read()))
-                values=merge_screenshots(results)
-                DB.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,values,submitted_at=msg.created_at)
-                await self.reaction(msg,'❌',True)
-                await self.reaction(msg,'✅')
-                try: await self.boards()
-                except Exception: logging.exception('Leaderboard update pending; periodic refresh will retry')
-            except Exception as e:
-                logging.exception('Submission failed: %s',msg.id)
-                try: DB.record(msg.id,msg.author.id,msg.author.display_name,msg.jump_url,error=failure_reason(e))
-                except Exception: logging.exception('Audit write failed')
-                await self.reaction(msg,'❌')
-                try: await audit_log.flush()
-                except Exception: logging.exception('Failure report queued; audit channel delivery will retry')
-                if not job.replay:
-                    try: await msg.reply('Could not process this image. Please upload a clearer Stats screenshot; for the new panel keep the username, Money Earned and Grade Coins visible. You may attach two matching scroll views.',mention_author=False)
-                    except discord.HTTPException: pass
-            finally:
-                await self.reaction(msg,'⏳',True); self.submissions.done(job)
     async def boards(self):
         async with self.lock:
             channel=await self.fetch_channel(BOARD)
@@ -111,7 +83,10 @@ class Bot(discord.Client):
                 if mid:
                     try: message=await channel.fetch_message(mid)
                     except discord.NotFound: pass
-                if message: await message.edit(embed=embed)
+                if message:
+                    old=message.embeds[0] if message.embeds else None
+                    if old is None or old.title!=embed.title or old.description!=embed.description or old.color!=embed.color or old.footer.text!=embed.footer.text:
+                        await message.edit(embed=embed)
                 else:
                     message=await channel.send(embed=embed); DB.save_board(key,message.id)
                 if not message.pinned:
@@ -123,13 +98,19 @@ class Bot(discord.Client):
         except Exception: logging.exception('Audit channel delivery pending; will retry')
     @audit_refresh.before_loop
     async def before_audit_refresh(self): await self.wait_until_ready()
-    @tasks.loop(minutes=2)
+    @tasks.loop(seconds=30)
     async def refresh(self):
-        try: await self.boards()
-        except Exception: logging.exception('Leaderboard refresh failed')
+        if not self.boards_dirty and time.monotonic()-self.last_board_check<300:return
+        revision=self.board_revision
+        try:
+            await self.boards();self.last_board_check=time.monotonic()
+            if revision==self.board_revision:self.boards_dirty=False
+        except Exception:logging.exception('Leaderboard refresh failed')
     @refresh.before_loop
     async def before_refresh(self): await self.wait_until_ready()
 bot=Bot()
+from dm_submissions import register_submissions
+register_submissions(bot,DB,GUILD)
 @bot.tree.command(description='View your personal standings across all tracked statistics')
 @app_commands.guild_only()
 async def rank(interaction:discord.Interaction):
@@ -151,6 +132,6 @@ async def leaderboard(interaction:discord.Interaction,category:str='packs',page:
     await interaction.response.send_message(f'**{META[category][0]} — Page {page}**\n'+('\n'.join(lines) or 'No players on this page.'),ephemeral=True)
 audit_log=AuditChannel(bot, DB, GUILD, AUDIT_CHANNEL, META, display)
 register_admin(bot, DB, GUILD, META, display, role_id=ADMIN_ROLE,
-               audit_channel=audit_log if AUDIT_CHANNEL else None)
+               audit_channel=audit_log if AUDIT_CHANNEL else None,queue_status=bot.submissions.pipeline.status)
 
 if __name__=='__main__': bot.run(os.environ['DISCORD_TOKEN'],log_handler=None)
