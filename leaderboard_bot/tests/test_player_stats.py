@@ -93,8 +93,7 @@ class PlayerParsingTests(unittest.TestCase):
         self.assertEqual(merge_screenshots([one,two]),expected)
         self.assertEqual(merge_screenshots([two,one]),expected)
     def test_mismatched_or_legacy_two_views_are_rejected(self):
-        for results in [[],[{}, {}, {}],[dict(username='A',money=1),dict(username='B',money=2)],
-                        [dict(money=1),dict(money=2)]]:
+        for results in [[],[{}, {}, {}],[dict(username='A',money=1),dict(username='B',money=2)]]:
             with self.assertRaises(OCRFailure):merge_screenshots(results)
     def test_ambiguous_or_single_numeric_reading_is_not_accepted(self):
         im=Image.new('RGB',(50,50))

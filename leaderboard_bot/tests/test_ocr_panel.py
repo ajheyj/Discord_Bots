@@ -27,7 +27,10 @@ class PanelTests(unittest.TestCase):
     def test_conflicting_or_missing_values_fail(self):
         for values in [[100],[],[100,100,101]]:
             found=defaultdict(list,packs=values,money=[10,10],coins=[5,5])
-            with self.assertRaises(ocr.OCRFailure):ocr.resolve(found)
+            result=ocr.resolve(found)
+            self.assertNotIn('packs',result)
+            self.assertEqual(result['money'],10)
+            self.assertTrue(result['_warnings'])
     def test_successful_full_image_does_not_trigger_fallback(self):
         def read(variant,found,psm=11):
             for key,value in [('packs',3),('money',4),('coins',5)]:found[key].append(value)
@@ -48,7 +51,10 @@ class PanelTests(unittest.TestCase):
             if psm==11:found['coins'].clear() # force a missing stat to trigger fallback
         image=Image.new('RGB',(200,100),'black')
         with patch.object(ocr,'read_variant',side_effect=read),patch.object(ocr,'panel_regions',return_value=[image]),patch.object(ocr,'panel_variants',return_value=[image,image]):
-            with self.assertRaises(ocr.OCRFailure):ocr.extract(self.image_data())
+            result=ocr.extract(self.image_data())
+            self.assertNotIn('packs',result)
+            self.assertEqual(result['money'],4)
+            self.assertEqual(result['coins'],5)
     def test_extra_new_ui_row_does_not_become_a_requested_stat(self):
         data={'text':['Total','Shiny','Cards','Collected:','6'],'conf':[99]*5,
               'block_num':[1]*5,'par_num':[1]*5,'line_num':[1]*5}

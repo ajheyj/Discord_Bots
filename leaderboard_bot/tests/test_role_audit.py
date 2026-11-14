@@ -17,6 +17,7 @@ class RoleAuditTests(unittest.IsolatedAsyncioTestCase):
         self.temp=tempfile.TemporaryDirectory();self.path=str(Path(self.temp.name)/'db')
         self.store=Store(self.path)
         self.store.record(1,20,'Player','url',dict(packs=100,money=200,coins=25))
+        self.store.db.execute("UPDATE submission_results SET delivered_message='already-delivered'");self.store.db.commit()
         self.client=discord.Client(intents=discord.Intents.none())
         self.bot=SimpleNamespace(tree=app_commands.CommandTree(self.client),boards=AsyncMock(),fetch_channel=AsyncMock())
         self.channel=Mock(spec=discord.TextChannel)
