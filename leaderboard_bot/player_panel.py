@@ -35,6 +35,39 @@ def agree(image, parser, label, min_conf=65):
         raise OCRFailure('Could not confidently read '+label)
     return accepted[0]
 
+def money_readings(image,min_conf=65):
+    """Extra unrestricted OCR passes for short currency strings; no digit/suffix substitutions."""
+    rgb=np.asarray(image)
+    gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
+    _,otsu=cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
+    masks=[255-cv2.inRange(rgb,(threshold,threshold,threshold),(255,255,255))
+           for threshold in (120,140)] + [otsu]
+    for mask,scale in zip(masks,(2,3,3)):
+        padded=cv2.copyMakeBorder(mask,10,10,10,10,cv2.BORDER_CONSTANT,value=255)
+        scaled=cv2.resize(padded,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
+        for psm in (7,8):
+            data=pytesseract.image_to_data(scaled,config=f'--psm {psm}',
+                         output_type=pytesseract.Output.DICT,timeout=20)
+            indices=[i for i,text in enumerate(data['text']) if text.strip()]
+            if indices and min(float(data['conf'][i]) for i in indices)>=min_conf:
+                yield ' '.join(data['text'][i].strip() for i in indices)
+
+def agree_money(image):
+    accepted=[]
+    def collect(texts):
+        for text in texts:
+            try:accepted.append(number(text,money=True))
+            except OCRFailure:pass
+    collect(readings(image))
+    # A supported-number conflict cannot be rescued by a majority of later readings.
+    if len(set(accepted))>1:raise OCRFailure('Could not confidently read Money Earned: conflicting accepted readings')
+    if len(accepted)<2:collect(money_readings(image))
+    if len(set(accepted))>1:raise OCRFailure('Could not confidently read Money Earned: conflicting accepted readings')
+    if len(accepted)<2:
+        raise OCRFailure(f'Could not confidently read Money Earned: only {len(accepted)} valid high-confidence reading(s); need two agreeing readings')
+    return accepted[0]
+
+
 def username(text):
     text=unicodedata.normalize('NFC',' '.join(text.split()))
     if not 1 <= len(text) <= 64 or any(c in text for c in '<>@') or not any(c.isalnum() for c in text):
@@ -81,7 +114,7 @@ def extract_player_panel(image):
                 key=agree(label_image,category,'visible Player Stats label',min_conf=0)
                 value_image=image.crop((vx+int(vw*.06),vy+int(vh*.1),vx+vw-int(vw*.06),vy+vh-int(vh*.1)))
                 parser=playtime_seconds if key=='playtime' else lambda text,k=key:number(text,k=='money')
-                value=agree(value_image,parser,ALIASES[key][0])
+                value=agree_money(value_image) if key=='money' else agree(value_image,parser,ALIASES[key][0])
                 if key in result and result[key]!=value:
                     result.pop(key,None);conflicts.add(key)
                     raise OCRFailure('Conflicting visible '+key+' rows')

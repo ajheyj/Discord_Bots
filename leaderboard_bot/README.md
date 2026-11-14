@@ -123,7 +123,7 @@ python -m unittest discover -s tests -v
 python ocr.py "/path/to/image.png"
 ```
 
-On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Scripts\python.exe`. No token is needed for these offline checks. The current suite discovers 100 tests: 95 pass and five private-image cases skip without `OCR_SAMPLE_DIR` and `PLAYER_STATS_SAMPLE_DIR`. A 500-job/two-files-each simulation reaches 471 successful and 29 deliberately failed outcomes after retries and a restart, with one OCR and at most two downloads. This uses synthetic small files and fake Discord/OCR, not a 1,000-photo CPU/throughput benchmark. Both real supplied new-layout screenshots also pass through the new single-thread subprocess with exact expected values. See [TEST_RESULTS.md](TEST_RESULTS.md) for sample outcomes and platform/live-test limits. User testing confirmed bot startup, a sample submission, admin audit delivery and the previously rejected photo passing; this is not validation across every hosting platform or Discord edge case.
+On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Scripts\python.exe`. No token is needed for these offline checks. The current suite discovers 108 tests: 103 pass and five private-image cases skip without `OCR_SAMPLE_DIR` and `PLAYER_STATS_SAMPLE_DIR`. A 500-job/two-files-each simulation reaches 471 successful and 29 deliberately failed outcomes after retries and a restart, with one OCR and at most two downloads. This uses synthetic small files and fake Discord/OCR, not a 1,000-photo CPU/throughput benchmark. Both real supplied new-layout screenshots also pass through the new single-thread subprocess with exact expected values. See [TEST_RESULTS.md](TEST_RESULTS.md) for sample outcomes and platform/live-test limits. User testing confirmed bot startup, a sample submission, admin audit delivery and the previously rejected photo passing; this is not validation across every hosting platform or Discord edge case.
 
 ## Sources
 
@@ -133,3 +133,5 @@ On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Script
 - [discord.py message history](https://discordpy.readthedocs.io/en/stable/api.html#discord.TextChannel.history)
 - [Discord command permissions](https://support-apps.discord.com/hc/en-us/articles/26501869403159-Command-Permissions)
 - [Tesseract installation](https://tesseract-ocr.github.io/tessdoc/Installation.html)
+
+Money Earned has an additional bounded fallback when its original passes yield fewer than two valid readings. It tries alternative masks, resizing and line/word segmentation without a character whitelist. The same confidence floor, known suffix parser and two-agreeing-readings rule apply; accepted numeric conflicts remain rejected.

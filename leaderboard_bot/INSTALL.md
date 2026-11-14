@@ -109,7 +109,7 @@ If the repository is already installed, use the update section instead of clonin
 .venv/bin/python bot.py
 ```
 
-On Linux expect 100 tests with five optional private-image tests skipped unless you supply their fixtures. Windows also skips the POSIX descendant-process check. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
+On Linux expect 108 tests with five optional private-image tests skipped unless you supply their fixtures. Windows also skips the POSIX descendant-process check. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
 
 ### Run as a service
 
@@ -321,7 +321,7 @@ cd leaderboard_bot
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 100 discovered, 95 pass, 5 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. Startup migrations preserve existing scores, profiles and audits while adding the durable queue and indexes. Keep the backup made above. On first startup pending jobs resume and the history scan considers recent messages. No old queue files need manual conversion. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
+Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 108 discovered, 103 pass, 5 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. Startup migrations preserve existing scores, profiles and audits while adding the durable queue and indexes. Keep the backup made above. On first startup pending jobs resume and the history scan considers recent messages. No old queue files need manual conversion. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
 
 ```sh
 chown -R leaderboard:leaderboard /opt/Discord_Bots/leaderboard_bot
