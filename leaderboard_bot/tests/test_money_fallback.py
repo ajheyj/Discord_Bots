@@ -29,7 +29,7 @@ class MoneyFallbackTests(unittest.TestCase):
             with self.assertRaisesRegex(OCRFailure,'only 1 valid'):panel.agree_money(self.image)
     def test_fallback_filters_low_confidence_tokens_and_uses_no_whitelist(self):
         def response(conf):return {'text':['$82.2Qi'],'conf':[conf]}
-        with patch.object(panel.pytesseract,'image_to_data',side_effect=[response(64),response(65),response(90),response(20),response(0),response(99)]) as read:
+        with patch.object(panel.pytesseract,'image_to_data',side_effect=[response(64),response(65),response(90),response(20),response(0),response(99),response(0),response(0)]) as read:
             self.assertEqual(list(panel.money_readings(self.image)),['$82.2Qi']*3)
-            self.assertEqual(read.call_count,6)
+            self.assertEqual(read.call_count,8)
             for call in read.call_args_list:self.assertNotIn('whitelist',call.kwargs['config'])
