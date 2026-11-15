@@ -126,3 +126,20 @@ class FailureLogTests(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+class AutomaticReviewTests(ReplayTests):
+    async def test_expired_session_recovered_once_per_reader(self):
+        msg=message();msg.guild=None
+        self.assertTrue(self.replay.pipeline.admit(msg))
+        self.replay.jobs.fail(msg.id,'unreadable')
+        channel=SimpleNamespace(id=123,fetch_message=AsyncMock(return_value=msg))
+        self.bot.fetch_user=AsyncMock(return_value=SimpleNamespace(create_dm=AsyncMock(return_value=channel)))
+        start=NOW-timedelta(hours=72)
+        await self.replay.review_failed_dms(start,NOW)
+        self.assertEqual(self.replay.jobs.get(1)['state'],'download_wait')
+        self.replay.jobs.fail(1,'unreadable')
+        await self.replay.review_failed_dms(start,NOW)
+        self.assertEqual(self.replay.jobs.get(1)['state'],'failed')
+        self.replay.reader_revision='new-reader'
+        await self.replay.review_failed_dms(start,NOW)
+        self.assertEqual(self.replay.jobs.get(1)['state'],'download_wait')
