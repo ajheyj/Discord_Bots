@@ -146,9 +146,15 @@ Downloads keep the accepted attachment ID and original reported size. When actua
 
 
 ### Submission audit threads
-New screenshot results are delivered into two reusable threads under `AUDIT_CHANNEL_ID`: **Successful submissions** and **Failed submissions and partial reads**. Recognition warnings route a result to the review thread even when some scores were saved. Cached screenshots are attached under the existing limits. Moderator score corrections remain in the parent channel. Existing audit posts are not moved.
+New screenshot results are delivered into three reusable threads under `AUDIT_CHANNEL_ID`: **Complete reads**, **Partial reads**, and **Failed reads**. Recognition warnings route a result to the review thread even when some scores were saved. Cached screenshots are attached under the existing limits. Moderator score corrections remain in the parent channel. Existing audit posts are not moved.
 
 Thread IDs are saved in SQLite and reused after restarts. Archived threads are reopened, and deleted threads are recreated. If thread access is denied, delivery stays pending. Keep the parent audit channel restricted to moderators; its public threads are visible to people who can access that channel.
 
 ### Language support
 The current screenshot reader recognizes English stat labels and the existing English-style numbers/suffixes (`K`, `M`, `B`, `T`, `Qa`, `Qi`). It does not yet support translated labels, locale-specific separators or translated playtime units. Replies and audit messages are English. Adding Tesseract language files alone is insufficient: each supported locale needs label aliases, strict numeric parsing and screenshot regression samples. Unicode names can be stored, but accurate OCR across scripts is not guaranteed.
+
+
+### Three-way audit routing
+Complete reads contain all four core stats (packs, money, coins, shiny cards) with no recognition warnings; playtime is optional. Partial reads contain at least one stat but have missing core fields or recognition warnings. Failed reads contain no recognized stats. A zero score counts as recognized.
+
+The bot reuses and renames the existing success and failure threads, preserving their historical messages, and creates a separate Partial reads thread when needed. Historical partial entries in the former combined failure thread stay there. New results and screenshot copies go to the matching thread. No new settings or permissions are required beyond the previous thread update.

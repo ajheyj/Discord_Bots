@@ -447,6 +447,12 @@ git pull --ff-only
 systemctl restart leaderboard-bot
 ```
 
-The two threads are created when their first matching results are delivered. Check each with a successful submission and a failed/partial submission. Old audit posts stay where they are. Screenshot limits and cache retention still apply.
+The three threads are created when their first matching results are delivered. Check each with a successful submission and a failed/partial submission. Old audit posts stay where they are. Screenshot limits and cache retention still apply.
 
 This package includes automatic failed-DM review. Failed accepted submissions within `HISTORY_LOOKBACK_HOURS` (72 by default) are automatically retried once per reader revision at startup, including after session expiry. Partial successes are not automatically replayed. Deleted/inaccessible originals cannot be recovered. If this photo already produced a partial success on your server, it must be resubmitted to recover its missing fields.
+
+
+### Three-way audit routing
+Complete reads contain all four core stats (packs, money, coins, shiny cards) with no recognition warnings; playtime is optional. Partial reads contain at least one stat but have missing core fields or recognition warnings. Failed reads contain no recognized stats. A zero score counts as recognized.
+
+The bot reuses and renames the existing success and failure threads, preserving their historical messages, and creates a separate Partial reads thread when needed. Historical partial entries in the former combined failure thread stay there. New results and screenshot copies go to the matching thread. No new settings or permissions are required beyond the previous thread update.

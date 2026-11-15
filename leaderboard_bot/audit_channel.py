@@ -11,8 +11,17 @@ class AuditChannel:
         self.categories, self.display = categories, display
         self.lock = asyncio.Lock()
 
-    async def submission_thread(self, channel, failed):
-        kind='failed' if failed else 'successful'
+    @staticmethod
+    def read_status(data):
+        recognized=data.get('recognized') or {}
+        if not recognized:return 'failed'
+        if data.get('warnings') or not all(key in recognized for key in ('packs','money','coins','shiny')):
+            return 'partial'
+        return 'successful'
+
+    async def submission_thread(self, channel, kind):
+        names={'successful':'Complete reads','partial':'Partial reads','failed':'Failed reads'}
+        if kind not in names:raise ValueError('Unknown submission audit status')
         self.store.db.execute('CREATE TABLE IF NOT EXISTS audit_threads(kind TEXT PRIMARY KEY,channel TEXT,thread TEXT)')
         self.store.db.commit()
         saved=self.store.db.execute('SELECT channel,thread FROM audit_threads WHERE kind=?',(kind,)).fetchone()
@@ -23,9 +32,12 @@ class AuditChannel:
         if thread is not None:
             if not isinstance(thread,discord.Thread) or thread.parent_id!=channel.id or thread.guild.id!=self.guild_id:
                 raise ValueError('Saved audit thread does not belong to the configured audit channel.')
-            if thread.archived:await thread.edit(archived=False)
+            changes={}
+            if thread.archived:changes['archived']=False
+            if thread.name!=names[kind]:changes['name']=names[kind]
+            if changes:await thread.edit(**changes)
         else:
-            thread=await channel.create_thread(name='Failed submissions and partial reads' if failed else 'Successful submissions',
+            thread=await channel.create_thread(name=names[kind],
                 type=discord.ChannelType.public_thread,auto_archive_duration=10080,
                 reason='Separate leaderboard submission audits')
             with self.store.db:self.store.db.execute('INSERT OR REPLACE INTO audit_threads VALUES(?,?,?)',
@@ -79,7 +91,7 @@ class AuditChannel:
                 message = await channel.send(embed=self.embed(row), allowed_mentions=discord.AllowedMentions.none())
                 self.store.mark_admin_delivered(row[0], message.id)
             for row in failures:
-                target=await self.submission_thread(channel,True)
+                target=await self.submission_thread(channel,'failed')
                 message = await target.send(embed=self.failure_embed(row), allowed_mentions=discord.AllowedMentions.none())
                 self.store.mark_failure_delivered(row[0], message.id)
 
@@ -105,7 +117,7 @@ class AuditChannel:
                 if not files:
                     embed.add_field(name='Images',value='Cached images unavailable or exceed the audit channel upload limit. DM links are private to the submitter.',inline=False)
                 try:
-                    target=await self.submission_thread(channel,not data.get('recognized') or bool(data.get('warnings')))
+                    target=await self.submission_thread(channel,self.read_status(data))
                     message=await target.send(embed=embed,files=files,allowed_mentions=discord.AllowedMentions.none())
                 finally:
                     for file in files:file.close()
