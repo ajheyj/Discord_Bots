@@ -38,3 +38,7 @@ Database-backed admission, private image spooling, two download workers, one iso
 ## Private submissions and partial recognition update
 
 /submit privately opens a 24-hour DM upload session. /submission-result privately shows the caller's latest completed result. New public processing replies/reactions are disabled. Individual readable stats save independently while uncertain/off-screen values remain unchanged; conflicting readable player names still reject a pair. Moderator audit summaries mirror committed changes and copy available screenshots within the channel upload limit. Startup recovery covers recorded DM sessions as well as legacy submissions-channel history.
+
+## November 15 additions
+
+A persistent pinned usage guide now precedes the scoreboards using bot-owned message slots. Whole-image label search supplements template geometry for varied/cropped/photo submissions. Download-size discrepancies validate decoded images and reserve their actual cache size while keeping original attachment IDs. OCR can still omit conflicting/unreadable fields; broader consented fixtures and runtime monitoring remain useful next steps.

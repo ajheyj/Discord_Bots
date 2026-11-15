@@ -74,6 +74,8 @@ class Bot(discord.Client):
         async with self.lock:
             channel=await self.fetch_channel(BOARD)
             if channel.guild.id!=GUILD: raise ValueError('Leaderboard channel belongs to another server')
+            from leaderboard_guide import ensure_guide
+            await ensure_guide(self,DB,channel,META)
             for key,(title,color) in META.items():
                 all_rows=DB.ranked(key); rows=all_rows[:10]
                 lines=[f'**{1+sum(r[2]>v for r in all_rows)}.** {player_label(u,n)} — **{display(key,v)}**' for u,n,v in rows]

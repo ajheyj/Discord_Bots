@@ -5,7 +5,7 @@ from difflib import SequenceMatcher
 import cv2
 import numpy as np
 import pytesseract
-from ocr import OCRFailure, number, playtime_seconds
+from ocr import OCRFailure, AmbiguousPanel, number, playtime_seconds
 
 ALIASES = {'packs': ('Packs Opened',), 'money': ('Money Earned',),
            'coins': ('Grade Coins Collected',), 'shiny': ('Shiny Cards Collected',),
@@ -31,8 +31,8 @@ def agree(image, parser, label, min_conf=65):
     for text in readings(image,min_conf):
         try: accepted.append(parser(text))
         except (ValueError, OCRFailure): pass
-    if len(accepted)<2 or len(set(accepted)) != 1:
-        raise OCRFailure('Could not confidently read '+label)
+    if len(set(accepted))>1:raise OCRFailure('Conflicting accepted readings for '+label)
+    if len(accepted)<2:raise OCRFailure('Could not confidently read '+label)
     return accepted[0]
 
 def money_readings(image,min_conf=65):
@@ -42,10 +42,11 @@ def money_readings(image,min_conf=65):
     _,otsu=cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
     masks=[255-cv2.inRange(rgb,(threshold,threshold,threshold),(255,255,255))
            for threshold in (120,140)] + [otsu]
-    for mask,scale in zip(masks,(2,3,3)):
+    masks += [255-cv2.inRange(rgb,(threshold,threshold,threshold),(255,255,255)) for threshold in (80,90)]
+    for mask,scale in zip(masks,(2,3,3,1,1)):
         padded=cv2.copyMakeBorder(mask,10,10,10,10,cv2.BORDER_CONSTANT,value=255)
         scaled=cv2.resize(padded,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
-        for psm in (7,8):
+        for psm in ((7,8) if scale>1 else (7,)):
             data=pytesseract.image_to_data(scaled,config=f'--psm {psm}',
                          output_type=pytesseract.Output.DICT,timeout=20)
             indices=[i for i,text in enumerate(data['text']) if text.strip()]
@@ -97,7 +98,7 @@ def extract_player_panel(image):
         try:name=agree(name_image,username,'Player Stats username')
         except OCRFailure:name=None
         rows=[r for r in components if .75*w<=r[2]<=1.05*w and .45*h<=r[3]<=1.4*h
-              and x-w*.05<=r[0] and r[0]+r[2]<=x+w*1.05
+              and x-w*.05<=r[0] and r[0]+r[2]<=x+w*1.18
               and y+h<r[1]<y+h*7 and .015<r[4]/(r[2]*r[3])<.35]
         result={'_warnings':[]}
         if name:result['username']=name
@@ -125,5 +126,5 @@ def extract_player_panel(image):
             raise OCRFailure('Could not confidently read any Player Stats values')
         if not result['_warnings']:result.pop('_warnings')
         results.append(result)
-    if len(results)>1:raise OCRFailure('More than one Player Stats panel found; crop to one player')
+    if len(results)>1:raise AmbiguousPanel('More than one Player Stats panel found; crop to one player')
     return results[0] if results else None

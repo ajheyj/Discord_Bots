@@ -81,3 +81,18 @@ Current Linux suite: **108 discovered, 103 passed, 5 optional private-image case
 The reported Discord result confirms Money Earned was omitted rather than merely unchanged; the prior $82.2Qi remains saved. The exact attached screenshot reads correctly with Tesseract 5.5.0 in the development environment, so the production-specific confidence failure is not reproduced. The patch adds six bounded, unrestricted alternative OCR passes only when the initial passes provide fewer than two valid agreeing reads. Existing supported-number disagreements cannot be rescued by majority voting. Failures report whether readings conflicted or how many valid high-confidence readings were available.
 
 Real money-crop validation forced every original OCR reading unavailable; the fallback still recovered exactly 82,200,000,000,000,000,000 ($82.2Qi) using agreeing accepted reads. Full-image extraction also remains correct. This demonstrates an additional recovery path, not a guarantee for every production engine/image. No digits or suffixes are guessed or rewritten; confidence remains at least 65. No live Discord token was used. After deployment, resend the screenshot: an already completed partial submission is not automatically reprocessed.
+
+## November 15: whole-image search, attachment size recovery and pinned guide
+
+Current Linux suite: **123 discovered, 118 passed, 5 optional fixtures skipped**. No live Discord credentials were used. New tests cover position-independent label matching, rejection of HUD text/leading icons, the two-label cluster requirement, value confidence/conflicts, prevention of template-conflict override, valid/invalid/empty size discrepancies, actual-size storage reservation, budget rejection, cached-file reuse, guide persistence, migration of existing bot-only message slots and missing pin permissions.
+
+Real-image observations (private fixtures are not included in the ZIP):
+
+- image(20261115-070724).png, blue-tinted monitor photo: previously wholly rejected; whole-image fallback reads packs 7,803, coins 2,738 and shiny cards 9. Money remains uncertain and is omitted. Header name is not confidently confirmed; the prior Discord-linked name is retained.
+- image(20261115-070729).png, direct screenshot: expanded relative row bounds read packs 6,511, money $226Qi and coins 2,400. The whole-image path also recovers the clipped shiny row as 5.
+- image(20261115-071344).png, cropped panel: it can reach OCR after a valid size discrepancy; image validation/download behavior is tested separately from Discord. The exact crop reads packs 6,511, money $226Qi, coins 2,401 and shiny cards 5 after the OCR changes.
+- image(20261115-071454).png, direct screenshot: money $226Qi, coins 2,402 and shiny cards 5 read correctly. Packs 6,519 produces conflicting accepted readings on this engine and remains omitted rather than being forced through by majority voting.
+
+OCR names in the direct examples are read as Cool_but_Wicked on this Tesseract setup; digit/letter confusions in the actual stylized name remain possible. Discord ID owns the record; this is not verified Epic account linking. Do not promise perfect name transcription or silently substitute guessed characters.
+
+The screenshot bytes supplied here do not establish why the production download size differed; the patch validates and safely accounts for a discrepancy, rather than claiming its cause. Live Discord download behavior, guide placement/pins, migration permissions, API rate limits, Windows and Docker still need operator validation. The 500-job synthetic burst remains a queue/concurrency test, not a real-photo performance benchmark.

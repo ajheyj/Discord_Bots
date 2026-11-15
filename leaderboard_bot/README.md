@@ -24,7 +24,7 @@ Each stat is evaluated independently. At least one confidently read numeric valu
 
 Two views merge per-category maxima. If both readable usernames are present, they must agree exactly; a mismatch rejects the submission. A wholly unreadable image can be skipped while values from the other image are saved. Recognition notes appear in the private summary and audit report. Individual fields still require two agreeing accepted readings; partial recognition does not lower confidence thresholds. Already-successful messages are not re-read merely to fill missing fields; send a fresh screenshot if needed.
 
-The first three public message IDs are preserved; the two new category messages are created automatically. `/rank`, `/leaderboard` and `/admin-set` include the new categories. Admin removal clears all recorded numeric scores while retaining name/audit history.
+Public board messages are reused and missing category messages are created automatically. The pinned-guide migration described below changes which content occupies existing bot message slots. `/rank`, `/leaderboard` and `/admin-set` include the new categories. Admin removal clears all recorded numeric scores while retaining name/audit history.
 
 ## Commands
 
@@ -123,7 +123,7 @@ python -m unittest discover -s tests -v
 python ocr.py "/path/to/image.png"
 ```
 
-On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Scripts\python.exe`. No token is needed for these offline checks. The current suite discovers 108 tests: 103 pass and five private-image cases skip without `OCR_SAMPLE_DIR` and `PLAYER_STATS_SAMPLE_DIR`. A 500-job/two-files-each simulation reaches 471 successful and 29 deliberately failed outcomes after retries and a restart, with one OCR and at most two downloads. This uses synthetic small files and fake Discord/OCR, not a 1,000-photo CPU/throughput benchmark. Both real supplied new-layout screenshots also pass through the new single-thread subprocess with exact expected values. See [TEST_RESULTS.md](TEST_RESULTS.md) for sample outcomes and platform/live-test limits. User testing confirmed bot startup, a sample submission, admin audit delivery and the previously rejected photo passing; this is not validation across every hosting platform or Discord edge case.
+On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Scripts\python.exe`. No token is needed for these offline checks. The current suite discovers 123 tests: 118 pass and five private-image cases skip without `OCR_SAMPLE_DIR` and `PLAYER_STATS_SAMPLE_DIR`. A 500-job/two-files-each simulation reaches 471 successful and 29 deliberately failed outcomes after retries and a restart, with one OCR and at most two downloads. This uses synthetic small files and fake Discord/OCR, not a 1,000-photo CPU/throughput benchmark. Both real supplied new-layout screenshots also pass through the new single-thread subprocess with exact expected values. See [TEST_RESULTS.md](TEST_RESULTS.md) for sample outcomes and platform/live-test limits. User testing confirmed bot startup, a sample submission, admin audit delivery and the previously rejected photo passing; this is not validation across every hosting platform or Discord edge case.
 
 ## Sources
 
@@ -135,3 +135,11 @@ On Debian use `.venv/bin/python` instead of `python`; Windows uses `.venv\Script
 - [Tesseract installation](https://tesseract-ocr.github.io/tessdoc/Installation.html)
 
 Money Earned has an additional bounded fallback when its original passes yield fewer than two valid readings. It tries alternative masks, resizing and line/word segmentation without a character whitelist. The same confidence floor, known suffix parser and two-agreeing-readings rule apply; accepted numeric conflicts remain rejected.
+
+## November 15: resilient reading, downloads and pinned instructions
+
+The bot maintains a pinned **How to use the leaderboard** embed before its five scoreboard messages. On an existing installation it reuses only its own existing message slots, turning the oldest into the guide, shifting the category assignments and creating the final missing scoreboard slot. It does not delete messages or change scores. Existing links to a scoreboard message may therefore refer to a different category/guide afterward. Repeated refreshes/restarts reuse the guide; missing pin permission logs a warning for manual pinning.
+
+The template reader still uses relative color/geometry, but its row bounds accommodate more panel sizes. If it fails or omits a core stat/flags uncertainty, a whole-image fallback locates aligned supported stat labels anywhere in the image, then finds nearby value boxes or OCR-located numeric text. Two distinct aligned labels are required to establish a stats cluster; each accepted value still needs two matching readings at confidence >=65. A supported-number conflict cannot be overridden by later consensus. Ambiguous fields remain unchanged. The fallback may retain the previous Discord-linked name when a photo's header cannot be read. A clearer direct screenshot is still preferable.
+
+Downloads keep the accepted attachment ID and original reported size. When actual bytes differ, the same original attachment is accepted only after full image validation, format/pixel/15-MB checks and a successful adjustment of the reserved cache budget. The cached size is stored separately for restart/retry checks. Invalid/truncated files retry with a finite budget; changed attachment IDs remain rejected. This handles a size discrepancy safely without claiming its production cause was confirmed.

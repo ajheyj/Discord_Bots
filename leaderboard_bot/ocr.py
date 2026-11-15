@@ -9,6 +9,7 @@ import pytesseract
 SUFFIXES = {'':0, 'K':3, 'M':6, 'B':9, 'T':12, 'Qa':15, 'Qi':18}
 LABELS = {'packs':'Packs Opened','money':'Total Money Earned','coins':'Total Grade Coins Earned'}
 class OCRFailure(ValueError): pass
+class AmbiguousPanel(OCRFailure): pass
 
 def number(text, money=False):
     text=text.strip().replace('$','').replace(',','').replace(' ','')
@@ -128,8 +129,28 @@ def extract(data):
     except Exception as e:
         raise OCRFailure('Unreadable image') from e
     original.thumbnail((2600,2600))
-    from player_panel import extract_player_panel
-    modern=extract_player_panel(original)
+    from player_panel import extract_player_panel,ALIASES
+    modern_error=None
+    try:modern=extract_player_panel(original)
+    except AmbiguousPanel:raise
+    except OCRFailure as error:modern=None;modern_error=error
+    if modern is not None and not modern.get('_warnings') and all(key in modern for key in ('packs','money','coins','shiny')):return modern
+    from image_scan import extract_image_stats
+    scanned=extract_image_stats(original)
+    if scanned is not None:
+        if modern is not None:
+            for key,value in scanned.items():
+                if key=='_warnings':continue
+                blocked=any('conflict' in note.lower() and any(alias.lower() in note.lower() for alias in ALIASES.get(key,())) for note in modern.get('_warnings',[]))
+                if blocked:continue
+                if key not in modern:modern[key]=value
+                elif modern[key]!=value:
+                    modern.pop(key,None);modern.setdefault('_warnings',[]).append('Conflicting panel/whole-image '+key+' readings')
+            modern['_warnings']=[note for note in modern.get('_warnings',[]) if 'conflict' in note.lower() or not any(key in modern and any(alias.lower() in note.lower() for alias in aliases) for key,aliases in ALIASES.items())]
+            if not modern['_warnings']:modern.pop('_warnings')
+            return modern
+        scanned.setdefault('_warnings',[]).append('Whole-image fallback used; username was not confidently confirmed. Previous Discord-linked name retained.')
+        return scanned
     if modern is not None:return modern
     gray=ImageOps.grayscale(original)
     variants=[original, original.resize((original.width*2,original.height*2)), ImageEnhance.Contrast(gray).enhance(2), gray.resize((gray.width*2,gray.height*2))]

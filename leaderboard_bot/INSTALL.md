@@ -109,7 +109,7 @@ If the repository is already installed, use the update section instead of clonin
 .venv/bin/python bot.py
 ```
 
-On Linux expect 108 tests with five optional private-image tests skipped unless you supply their fixtures. Windows also skips the POSIX descendant-process check. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
+On Linux expect 123 tests with five optional private-image tests skipped unless you supply their fixtures. Windows also skips the POSIX descendant-process check. Check Discord as below. Stop the foreground process with Ctrl+C before creating/enabling the service.
 
 ### Run as a service
 
@@ -321,7 +321,7 @@ cd leaderboard_bot
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 108 discovered, 103 pass, 5 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. Startup migrations preserve existing scores, profiles and audits while adding the durable queue and indexes. Keep the backup made above. On first startup pending jobs resume and the history scan considers recent messages. No old queue files need manual conversion. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
+Keep the preceding commit ID for rollback. If Git reports uncommitted work or cannot fast-forward, inspect it; do not blindly discard changes. Expected current test result: 123 discovered, 118 pass, 5 private-image tests skipped. Preserve `.env` and `data/`; add any desired new settings to the existing local file, never copy the template over it. Startup migrations preserve existing scores, profiles and audits while adding the durable queue and indexes. Keep the backup made above. On first startup pending jobs resume and the history scan considers recent messages. No old queue files need manual conversion. Always install updated requirements: OpenCV headless/NumPy are required by panel fallback. Then:
 
 ```sh
 chown -R leaderboard:leaderboard /opt/Discord_Bots/leaderboard_bot
@@ -426,3 +426,9 @@ It prints known numeric values plus the new-layout username, or a failure. Playt
 | PyNaCl/davey voice warnings | This bot uses no voice features; those warnings do not prevent leaderboard operation |
 
 OCR cannot prove account ownership or authenticity, and repeated OCR readings can repeat an error. Money abbreviations cannot reveal hidden game precision. See [README.md](README.md#how-ocr-works) and [TEST_RESULTS.md](TEST_RESULTS.md) before relying on scores for a competition.
+
+## November 15 update checks
+
+After backing up and installing all matching update files (including image_scan.py and leaderboard_guide.py), run the suite: **123 discovered, 118 passed, 5 optional fixtures skipped** on the tested Linux setup. Existing .env values need no change. Restart leaderboard-bot, allow its normal refresh, then confirm one pinned instruction embed appears before the five scoreboards. Pin permission is needed; if denied, pin the bot's guide manually. It reuses existing bot scoreboard slots without deleting posts, so prior scoreboard-message links may now show another category/the guide. Scores are unchanged by that layout migration.
+
+Resend previously completed partial submissions to retry newly readable fields. Each player must use their own Discord account and screenshots; two different players' images do not belong in the same submission. Test /submit, private results and audit screenshot copies. A size discrepancy now validates the image and records its actual cached size without relaxing attachment identity, disk budget or image limits. Pixel and byte failures remain rejected. Whole-image fallback improves varied placement, but uncertainty still leaves a field unchanged; it does not promise every photograph will read.

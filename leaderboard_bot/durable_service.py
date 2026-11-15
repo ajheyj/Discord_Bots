@@ -107,10 +107,27 @@ class DurablePipeline:
             if attachment is None or attachment.size!=expected['size']:
                 raise JobError('Original attachments were removed or changed before they were cached.')
             path=self.spool.paths(row)[index]
-            if path.is_file() and path.stat().st_size==expected['size']:continue
+            if path.is_file() and path.stat().st_size==expected.get('cached_size',expected['size']):continue
             data=await attachment.read()
-            if len(data)!=expected['size'] or len(data)>15*1024*1024:
-                raise JobError('Attachment size does not match its accepted metadata.')
+            if not data or len(data)>15*1024*1024:
+                raise JobError('Downloaded attachment is empty or exceeds 15 MB.')
+            if len(data)!=expected['size']:
+                # Only accept a size discrepancy after decoding the same original attachment as an image.
+                import io
+                from PIL import Image
+                def validate():
+                    try:
+                        with Image.open(io.BytesIO(data)) as image:
+                            if image.format not in ('PNG','JPEG','WEBP') or image.width*image.height>20_000_000:
+                                raise ValueError('Unsupported image or pixel limit exceeded')
+                            image.verify()
+                        with Image.open(io.BytesIO(data)) as image:image.load()
+                    except Exception as error:
+                        raise JobError('Downloaded image is incomplete or invalid; please resend the original image.',retry=True) from error
+                await asyncio.to_thread(validate)
+                try:self.jobs.cached_size(row['message'],index,len(data),shutil.disk_usage(self.config.spool).free)
+                except QueueRejected as error:raise JobError(str(error),retry=True) from error
+                logging.info('Validated attachment size discrepancy for message %s: reported=%s downloaded=%s',row['message'],expected['size'],len(data))
             await asyncio.to_thread(self.spool.write,row['message'],index,data)
         self.jobs.ready(row['message']);self.wake.set()
 

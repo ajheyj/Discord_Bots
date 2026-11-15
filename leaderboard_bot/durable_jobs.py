@@ -44,10 +44,10 @@ class DurableJobs:
         now=self.clock();old=self.get(message)
         if old and str(user)!=old['user']:raise QueueRejected('Original uploader does not match the saved job.')
         if old and (old['state']!='failed' or not replay):return False
-        required=sum(a['size'] for a in attachments)
+        required=sum(a.get('cached_size',a['size']) for a in attachments)
         # An existing failed job retains its original attachment snapshot and identity.
         if old:
-            attachments=json.loads(old['attachments']);required=sum(a['size'] for a in attachments)
+            attachments=json.loads(old['attachments']);required=sum(a.get('cached_size',a['size']) for a in attachments)
         extra=max(0,required-(old['reserved'] if old else 0))
         with self.db:
             count=self.db.execute("SELECT count(*) FROM queue_jobs WHERE state IN ('download_wait','downloading','ready','ocr_running','ocr_retry')").fetchone()[0]
@@ -136,3 +136,16 @@ class DurableJobs:
             (self.clock()+delay,str(message)))
     def need_download(self,message):
         with self.db:self.db.execute("UPDATE queue_jobs SET state='download_wait',spooled=0,next_at=?,updated=? WHERE message=?",(self.clock(),self.clock(),str(message)))
+
+    def cached_size(self,message,index,size,free_bytes):
+        row=self.get(message);attachments=json.loads(row['attachments'])
+        if not 0<size<=15*1024*1024:raise QueueRejected('Downloaded image exceeds the allowed size.')
+        attachments[index]['cached_size']=size
+        required=sum(a.get('cached_size',a['size']) for a in attachments)
+        extra=max(0,required-row['reserved'])
+        with self.db:
+            if self.reserved()+extra>self.config.spool_bytes or self.outstanding()+extra>free_bytes-self.config.min_free_bytes:
+                raise QueueRejected('Insufficient image storage for the actual downloaded image size.')
+            self.db.execute('UPDATE queue_jobs SET attachments=?,reserved=? WHERE message=?',
+                (json.dumps(attachments),required,str(message)))
+        return self.get(message)

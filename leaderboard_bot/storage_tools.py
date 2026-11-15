@@ -36,7 +36,7 @@ class Spool:
     def paths(self,row):
         return [self.directory(row['message'])/(str(i)+'.img') for i in range(len(json.loads(row['attachments'])))]
     def complete(self,row):
-        return all(p.is_file() and p.stat().st_size==a['size']
+        return all(p.is_file() and p.stat().st_size==a.get('cached_size',a['size'])
                    for p,a in zip(self.paths(row),json.loads(row['attachments'])))
     def write(self,message,index,data):
         directory=self.directory(message);created=not directory.exists()
