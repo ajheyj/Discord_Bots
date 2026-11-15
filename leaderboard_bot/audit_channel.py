@@ -11,6 +11,27 @@ class AuditChannel:
         self.categories, self.display = categories, display
         self.lock = asyncio.Lock()
 
+    async def submission_thread(self, channel, failed):
+        kind='failed' if failed else 'successful'
+        self.store.db.execute('CREATE TABLE IF NOT EXISTS audit_threads(kind TEXT PRIMARY KEY,channel TEXT,thread TEXT)')
+        self.store.db.commit()
+        saved=self.store.db.execute('SELECT channel,thread FROM audit_threads WHERE kind=?',(kind,)).fetchone()
+        thread=None
+        if saved and saved[0]==str(channel.id):
+            try:thread=await self.bot.fetch_channel(int(saved[1]))
+            except discord.NotFound:pass
+        if thread is not None:
+            if not isinstance(thread,discord.Thread) or thread.parent_id!=channel.id or thread.guild.id!=self.guild_id:
+                raise ValueError('Saved audit thread does not belong to the configured audit channel.')
+            if thread.archived:await thread.edit(archived=False)
+        else:
+            thread=await channel.create_thread(name='Failed submissions and partial reads' if failed else 'Successful submissions',
+                type=discord.ChannelType.public_thread,auto_archive_duration=10080,
+                reason='Separate leaderboard submission audits')
+            with self.store.db:self.store.db.execute('INSERT OR REPLACE INTO audit_threads VALUES(?,?,?)',
+                (kind,str(channel.id),str(thread.id)))
+        return thread
+
     def embed(self, row):
         audit_id, actor, user, time, action, category, before, after, reason = row
         before, after = json.loads(before), json.loads(after)
@@ -58,7 +79,8 @@ class AuditChannel:
                 message = await channel.send(embed=self.embed(row), allowed_mentions=discord.AllowedMentions.none())
                 self.store.mark_admin_delivered(row[0], message.id)
             for row in failures:
-                message = await channel.send(embed=self.failure_embed(row), allowed_mentions=discord.AllowedMentions.none())
+                target=await self.submission_thread(channel,True)
+                message = await target.send(embed=self.failure_embed(row), allowed_mentions=discord.AllowedMentions.none())
                 self.store.mark_failure_delivered(row[0], message.id)
 
             from submission_results import result_embed
@@ -83,7 +105,8 @@ class AuditChannel:
                 if not files:
                     embed.add_field(name='Images',value='Cached images unavailable or exceed the audit channel upload limit. DM links are private to the submitter.',inline=False)
                 try:
-                    message=await channel.send(embed=embed,files=files,allowed_mentions=discord.AllowedMentions.none())
+                    target=await self.submission_thread(channel,not data.get('recognized') or bool(data.get('warnings')))
+                    message=await target.send(embed=embed,files=files,allowed_mentions=discord.AllowedMentions.none())
                 finally:
                     for file in files:file.close()
                 with self.store.db:

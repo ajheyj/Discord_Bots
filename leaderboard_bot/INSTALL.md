@@ -432,3 +432,21 @@ OCR cannot prove account ownership or authenticity, and repeated OCR readings ca
 After backing up and installing all matching update files (including image_scan.py and leaderboard_guide.py), run the suite: **123 discovered, 118 passed, 5 optional fixtures skipped** on the tested Linux setup. Existing .env values need no change. Restart leaderboard-bot, allow its normal refresh, then confirm one pinned instruction embed appears before the five scoreboards. Pin permission is needed; if denied, pin the bot's guide manually. It reuses existing bot scoreboard slots without deleting posts, so prior scoreboard-message links may now show another category/the guide. Scores are unchanged by that layout migration.
 
 Resend previously completed partial submissions to retry newly readable fields. Each player must use their own Discord account and screenshots; two different players' images do not belong in the same submission. Test /submit, private results and audit screenshot copies. A size discrepancy now validates the image and records its actual cached size without relaxing attachment identity, disk budget or image limits. Pixel and byte failures remain rejected. Whole-image fallback improves varied placement, but uncertainty still leaves a field unchanged; it does not promise every photograph will read.
+
+
+## Photo recovery and audit-thread update
+Back up the database using the backup steps above, then install this patch after the image-recovery/guide update. Keep the existing `.env`; no new settings or dependencies are required.
+
+In the audit channel, allow the bot **View Channel**, **Read Message History**, **Create Public Threads**, **Send Messages in Threads**, **Embed Links**, and **Attach Files**. **Manage Threads** is needed if moderators lock threads that the bot must reopen. Keep access to the parent audit channel limited to moderators. Missing permissions leave audit deliveries pending.
+
+Upload the ZIP's `leaderboard_bot/` files into their matching GitHub paths. Then:
+
+```bash
+cd /opt/Discord_Bots
+git pull --ff-only
+systemctl restart leaderboard-bot
+```
+
+The two threads are created when their first matching results are delivered. Check each with a successful submission and a failed/partial submission. Old audit posts stay where they are. Screenshot limits and cache retention still apply.
+
+This package includes automatic failed-DM review. Failed accepted submissions within `HISTORY_LOOKBACK_HOURS` (72 by default) are automatically retried once per reader revision at startup, including after session expiry. Partial successes are not automatically replayed. Deleted/inaccessible originals cannot be recovered. If this photo already produced a partial success on your server, it must be resubmitted to recover its missing fields.

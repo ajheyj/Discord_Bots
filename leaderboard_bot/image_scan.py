@@ -9,6 +9,9 @@ from PIL import Image,ImageOps
 from ocr import OCRFailure,AmbiguousPanel,number,playtime_seconds
 from player_panel import ALIASES,clean,readings,money_readings
 
+SCAN_ALIASES={**ALIASES,'coins':ALIASES['coins']+('Grade Coins',),
+              'shiny':ALIASES['shiny']+('Shiny Cards',)}
+
 
 def labels_in(data):
     groups=defaultdict(list)
@@ -24,11 +27,11 @@ def labels_in(data):
                 text=' '.join(data['text'][i] for i in ids)
                 if any(float(data['conf'][i])<65 for i in ids):continue
                 matches=sorted((SequenceMatcher(None,clean(text),clean(alias)).ratio(),key)
-                               for key,aliases in ALIASES.items() for alias in aliases)
+                               for key,aliases in SCAN_ALIASES.items() for alias in aliases)
                 score,key=matches[-1]
                 if score<.9:continue
                 first=clean(data['text'][ids[0]])
-                if not first or not any(SequenceMatcher(None,first,clean(alias.split()[0])).ratio()>=.8 for alias in ALIASES[key]):continue
+                if not first or not any(SequenceMatcher(None,first,clean(alias.split()[0])).ratio()>=.8 for alias in SCAN_ALIASES[key]):continue
                 x=min(data['left'][i] for i in ids);y=min(data['top'][i] for i in ids)
                 right=max(data['left'][i]+data['width'][i] for i in ids)
                 bottom=max(data['top'][i]+data['height'][i] for i in ids)
@@ -61,8 +64,22 @@ def neutral_readings(image):
                 yield ' '.join(data['text'][i].strip() for i in ids)
 
 
+def foreground_crop(image):
+    """Remove colored value-box borders without changing characters."""
+    rgb=np.asarray(image.convert('RGB'))
+    mask=cv2.inRange(rgb,(175,175,175),(255,255,255))
+    _,_,stats,_=cv2.connectedComponentsWithStats(mask)
+    parts=[r for r in stats[1:] if r[4]>30 and r[2]>3 and r[3]>max(8,image.height*.12)
+           and r[2]<image.width*.9]
+    if not parts:return image
+    x=min(r[0] for r in parts);y=min(r[1] for r in parts)
+    right=max(r[0]+r[2] for r in parts);bottom=max(r[1]+r[3] for r in parts)
+    return image.crop((max(0,x-6),max(0,y-6),min(image.width,right+6),min(image.height,bottom+6)))
+
+
 def read_value(image,key):
     parse=playtime_seconds if key=='playtime' else lambda text:number(text,key=='money')
+    image=foreground_crop(image)
     accepted=[]
     for texts in (readings(image),neutral_readings(image)):
         for text in texts:
@@ -101,7 +118,7 @@ def extract_image_stats(image):
     labels=max(clusters,key=len);boxes=value_boxes(image)+text_boxes;result={};conflicts=set();notes=[]
     for key,x,y,right,bottom in labels:
         height=bottom-y;cy=(y+bottom)/2
-        candidates=[box for box in boxes if box[0]>right and abs(box[1]+box[3]/2-cy)<=max(height*.9,box[3]*.4)
+        candidates=[box for box in boxes if box[0]>right and abs(box[1]+box[3]/2-cy)<=max(height*1.6,box[3]*.6)
                     and box[3]>=height*.7 and box[3]<=height*4]
         if not candidates:continue
         vx,vy,vw,vh=min(candidates,key=lambda b:b[0]-right)

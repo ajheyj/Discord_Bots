@@ -143,3 +143,12 @@ The bot maintains a pinned **How to use the leaderboard** embed before its five 
 The template reader still uses relative color/geometry, but its row bounds accommodate more panel sizes. If it fails or omits a core stat/flags uncertainty, a whole-image fallback locates aligned supported stat labels anywhere in the image, then finds nearby value boxes or OCR-located numeric text. Two distinct aligned labels are required to establish a stats cluster; each accepted value still needs two matching readings at confidence >=65. A supported-number conflict cannot be overridden by later consensus. Ambiguous fields remain unchanged. The fallback may retain the previous Discord-linked name when a photo's header cannot be read. A clearer direct screenshot is still preferable.
 
 Downloads keep the accepted attachment ID and original reported size. When actual bytes differ, the same original attachment is accepted only after full image validation, format/pixel/15-MB checks and a successful adjustment of the reserved cache budget. The cached size is stored separately for restart/retry checks. Invalid/truncated files retry with a finite budget; changed attachment IDs remain rejected. This handles a size discrepancy safely without claiming its production cause was confirmed.
+
+
+### Submission audit threads
+New screenshot results are delivered into two reusable threads under `AUDIT_CHANNEL_ID`: **Successful submissions** and **Failed submissions and partial reads**. Recognition warnings route a result to the review thread even when some scores were saved. Cached screenshots are attached under the existing limits. Moderator score corrections remain in the parent channel. Existing audit posts are not moved.
+
+Thread IDs are saved in SQLite and reused after restarts. Archived threads are reopened, and deleted threads are recreated. If thread access is denied, delivery stays pending. Keep the parent audit channel restricted to moderators; its public threads are visible to people who can access that channel.
+
+### Language support
+The current screenshot reader recognizes English stat labels and the existing English-style numbers/suffixes (`K`, `M`, `B`, `T`, `Qa`, `Qi`). It does not yet support translated labels, locale-specific separators or translated playtime units. Replies and audit messages are English. Adding Tesseract language files alone is insufficient: each supported locale needs label aliases, strict numeric parsing and screenshot regression samples. Unicode names can be stored, but accurate OCR across scripts is not guaranteed.
