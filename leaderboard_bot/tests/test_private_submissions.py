@@ -108,7 +108,9 @@ class PrivateFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.replay.pipeline.spool.complete(row))
         channel=Mock(spec=discord.TextChannel);channel.guild=SimpleNamespace(id=99,filesize_limit=1000000)
         channel.send=AsyncMock(return_value=SimpleNamespace(id=777));self.bot.fetch_channel.return_value=channel
-        audit=AuditChannel(self.bot,self.store,99,456,{},str);await audit.flush()
+        audit=AuditChannel(self.bot,self.store,99,456,{},str)
+        audit.submission_thread=AsyncMock(return_value=channel)
+        await audit.flush()
         self.assertEqual(len(channel.send.call_args.kwargs['files']),2)
         self.assertIn('Screenshot results',channel.send.call_args.kwargs['embed'].title)
         self.replay.pipeline.cleanup();self.assertFalse(self.replay.pipeline.spool.directory(1).exists())

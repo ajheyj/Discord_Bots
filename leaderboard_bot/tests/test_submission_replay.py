@@ -82,6 +82,7 @@ class FailureLogTests(unittest.IsolatedAsyncioTestCase):
         self.channel.send=AsyncMock(return_value=SimpleNamespace(id=700))
         self.bot=SimpleNamespace(fetch_channel=AsyncMock(return_value=self.channel))
         self.audit=AuditChannel(self.bot,self.store,99,456,{'packs':('Packs',0),'money':('Money',0),'coins':('Coins',0)},lambda k,v:str(v))
+        self.audit.submission_thread=AsyncMock(return_value=self.channel)
     async def asyncTearDown(self):self.store.db.close();self.temp.cleanup()
     async def test_failure_embed_has_original_link_player_and_reason_without_pings(self):
         msg=message()

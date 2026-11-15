@@ -25,6 +25,7 @@ class RoleAuditTests(unittest.IsolatedAsyncioTestCase):
         self.channel.send=AsyncMock(return_value=SimpleNamespace(id=500))
         self.bot.fetch_channel.return_value=self.channel
         self.audit=AuditChannel(self.bot,self.store,99,123,META,lambda k,v:str(v))
+        self.audit.submission_thread=AsyncMock(return_value=self.channel)
         register_admin(self.bot,self.store,99,META,lambda k,v:str(v),role_id=456,audit_channel=self.audit)
         self.interaction=SimpleNamespace(guild_id=99,permissions=discord.Permissions.none(),user=SimpleNamespace(id=30,roles=[SimpleNamespace(id=456)]),response=SimpleNamespace(defer=AsyncMock(),send_message=AsyncMock(),is_done=lambda:False),followup=SimpleNamespace(send=AsyncMock()))
     async def asyncTearDown(self):
